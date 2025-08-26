@@ -5,11 +5,18 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
 var _ = net.Listen
 var _ = os.Exit
+
+// global map shared across all connections
+var redisGetSet = make(map[string]string)
+
+// optional mutex for concurrent access
+var mu sync.RWMutex
 
 func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -50,7 +57,6 @@ func handleConnection(conn net.Conn) {
 
 		cmdParser := parseRESP(cmd)
 
-		fmt.Println(cmdParser)
 		redisGetSet := map[string]string{}
 
 		switch strings.ToUpper(cmdParser[0]) {
