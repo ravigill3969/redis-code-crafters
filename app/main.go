@@ -40,6 +40,8 @@ func handleConnection(conn net.Conn) {
 	buffer := make([]byte, 1024)
 	for {
 
+		redisGetSet := map[string]string{}
+
 		n, err := conn.Read(buffer)
 		if err != nil {
 			conn.Write([]byte("+Unable to read from request\r\n"))
@@ -58,6 +60,13 @@ func handleConnection(conn net.Conn) {
 			} else {
 				conn.Write([]byte("+\r\n"))
 			}
+		case "SET":
+			redisGetSet[cmdParser[1]] = cmdParser[2]
+			conn.Write([]byte("+OK\r\n"))
+		case "GET":
+			res := redisGetSet[cmdParser[1]]
+			conn.Write([]byte(res))
+
 		default:
 			conn.Write([]byte("+Unknown command\r\n"))
 		}
@@ -74,7 +83,7 @@ func parseRESP(cmd string) []string {
 			continue
 		}
 		if line[0] == '*' || line[0] == '$' {
-			continue // skip array and bulk string headers
+			continue
 		}
 		parts = append(parts, line)
 	}
