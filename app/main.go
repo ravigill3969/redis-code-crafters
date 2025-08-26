@@ -48,13 +48,8 @@ func handleConnection(conn net.Conn) {
 		cmd := string(buffer[:n])
 		fmt.Println("Received:", cmd)
 
-		switch cmd {
-		case "PING\r\n":
-			conn.Write([]byte("+PONG\r\n"))
-		default:
-			conn.Write([]byte("+Unknown command\r\n"))
-		}
+		conn.Write([]byte("+PONG\r\n"))
+
 	}
-	
 
 }
