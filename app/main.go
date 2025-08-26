@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
@@ -30,7 +31,6 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		// conn.Write([]byte("+PONG\r\n"))
 		go handleConnection(conn)
 	}
 }
@@ -42,14 +42,29 @@ func handleConnection(conn net.Conn) {
 
 		n, err := conn.Read(buffer)
 		if err != nil {
-			// conn.Write([]byte("+Unable to read from request\r\n"))
+			conn.Write([]byte("+Unable to read from request\r\n"))
 			return
 		}
 		cmd := string(buffer[:n])
 		fmt.Println("Received:", cmd)
 
-		conn.Write([]byte("+PONG\r\n"))
+		cmdParser := parser(cmd)
 
+		if cmdParser[0] == "ECHO" {
+			conn.Write([]byte(cmdParser[1] + "\r\n"))
+			continue
+		}
+
+		switch cmd {
+		case "PING\r\n":
+			conn.Write([]byte("+PONG\r\n"))
+		default:
+			conn.Write([]byte("+Unknown command\r\n"))
+		}
 	}
 
+}
+
+func parser(cmd string) []string {
+	return strings.Fields(cmd)
 }
