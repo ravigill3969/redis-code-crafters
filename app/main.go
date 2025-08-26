@@ -57,7 +57,7 @@ func handleConnection(conn net.Conn) {
 
 		cmdParser := parseRESP(cmd)
 
-		redisGetSet := map[string]string{}
+		// redisGetSet := map[string]string{}
 
 		switch strings.ToUpper(cmdParser[0]) {
 		case "PING":
