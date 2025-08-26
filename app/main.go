@@ -49,16 +49,15 @@ func handleConnection(conn net.Conn) {
 
 		cmdParser := parseRESP(cmd)
 
-		fmt.Println(cmdParser)
-
-		if cmdParser[0] == "ECHO" || cmdParser[0] == "echo" {
-			conn.Write([]byte("+" + cmdParser[1] + "\r\n"))
-			continue
-		}
-
-		switch cmd {
-		case "PING\r\n":
+		switch strings.ToUpper(cmdParser[0]) {
+		case "PING":
 			conn.Write([]byte("+PONG\r\n"))
+		case "ECHO":
+			if len(cmdParser) > 1 {
+				conn.Write([]byte("+" + cmdParser[1] + "\r\n"))
+			} else {
+				conn.Write([]byte("+\r\n"))
+			}
 		default:
 			conn.Write([]byte("+Unknown command\r\n"))
 		}
