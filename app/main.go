@@ -51,7 +51,7 @@ func handleConnection(conn net.Conn) {
 		
 		cmdParser := parseRESP(cmd)
 		
-		fmt.Println(cmdParser[0])
+		fmt.Println(cmdParser)
 		redisGetSet := map[string]string{}
 
 		switch strings.ToUpper(cmdParser[0]) {
