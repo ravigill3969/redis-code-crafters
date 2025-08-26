@@ -52,7 +52,7 @@ func handleConnection(conn net.Conn) {
 		fmt.Println(cmdParser)
 
 		if cmdParser[0] == "ECHO" || cmdParser[0] == "echo" {
-			conn.Write([]byte(cmdParser[1] + "\r\n"))
+			conn.Write([]byte("+" + cmdParser[1] + "\r\n"))
 			continue
 		}
 
