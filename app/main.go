@@ -72,7 +72,8 @@ func handleConnection(conn net.Conn) {
 			}
 		case "GET":
 			if len(cmdParser) > 1 {
-				res := redisGetSet[cmdParser[1]]
+				key := cmdParser[1]
+				res := redisGetSet[key]
 				if res == "" {
 					conn.Write([]byte("$-1\r\n"))
 				} else {
