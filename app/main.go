@@ -41,16 +41,15 @@ func handleConnection(conn net.Conn) {
 	buffer := make([]byte, 1024)
 	for {
 
-		
 		n, err := conn.Read(buffer)
 		if err != nil {
 			conn.Write([]byte("+Unable to read from request\r\n"))
 			return
 		}
 		cmd := string(buffer[:n])
-		
+
 		cmdParser := parseRESP(cmd)
-		
+
 		fmt.Println(cmdParser)
 		redisGetSet := map[string]string{}
 
@@ -64,24 +63,25 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("+\r\n"))
 			}
 		case "SET":
-			if len(cmdParser) > 2 {
-				redisGetSet[cmdParser[1]] = cmdParser[2]
-				conn.Write([]byte("+OK\r\n"))
-			} else {
+			if len(cmdParser) < 3 {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
+				break
 			}
+			redisGetSet[cmdParser[1]] = cmdParser[2]
+			conn.Write([]byte("+OK\r\n"))
+
 		case "GET":
-			if len(cmdParser) > 1 {
-				key := cmdParser[1]
-				res := redisGetSet[key]
-				if res == "" {
-					conn.Write([]byte("$-1\r\n"))
-				} else {
-					fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(res), res)
-				}
-			} else {
+			if len(cmdParser) < 2 {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
+				break
 			}
+			value, ok := redisGetSet[cmdParser[1]]
+			if !ok {
+				conn.Write([]byte("$-1\r\n"))
+			} else {
+				conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)))
+			}
+
 		default:
 			conn.Write([]byte("+Unknown command\r\n"))
 		}
