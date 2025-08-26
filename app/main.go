@@ -42,7 +42,7 @@ func handleConnection(conn net.Conn) {
 
 		n, err := conn.Read(buffer)
 		if err != nil {
-			conn.Write([]byte("+Unable to read from request\r\n"))
+			// conn.Write([]byte("+Unable to read from request\r\n"))
 			return
 		}
 		cmd := string(buffer[:n])
