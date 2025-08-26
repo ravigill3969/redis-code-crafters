@@ -17,7 +17,8 @@ func main() {
 
 	// Uncomment this block to pass the first stage
 
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	// l, err := net.Listen("tcp", "0.0.0.0:6379")
+	l, err := net.Listen("tcp", "127.0.0.1:6380")
 
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
@@ -40,16 +41,18 @@ func handleConnection(conn net.Conn) {
 	buffer := make([]byte, 1024)
 	for {
 
-		redisGetSet := map[string]string{}
-
+		
 		n, err := conn.Read(buffer)
 		if err != nil {
 			conn.Write([]byte("+Unable to read from request\r\n"))
 			return
 		}
 		cmd := string(buffer[:n])
-
+		
 		cmdParser := parseRESP(cmd)
+		
+		fmt.Println(cmdParser[0])
+		redisGetSet := map[string]string{}
 
 		switch strings.ToUpper(cmdParser[0]) {
 		case "PING":
@@ -61,15 +64,27 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("+\r\n"))
 			}
 		case "SET":
-			redisGetSet[cmdParser[1]] = cmdParser[2]
-			conn.Write([]byte("+OK\r\n"))
+			if len(cmdParser) > 2 {
+				redisGetSet[cmdParser[1]] = cmdParser[2]
+				conn.Write([]byte("+OK\r\n"))
+			} else {
+				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
+			}
 		case "GET":
-			res := redisGetSet[cmdParser[1]]
-			conn.Write([]byte(res))
-
+			if len(cmdParser) > 1 {
+				res := redisGetSet[cmdParser[1]]
+				if res == "" {
+					conn.Write([]byte("$-1\r\n"))
+				} else {
+					conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(res), res)))
+				}
+			} else {
+				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
+			}
 		default:
 			conn.Write([]byte("+Unknown command\r\n"))
 		}
+
 	}
 
 }
