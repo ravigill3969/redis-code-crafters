@@ -46,11 +46,12 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 		cmd := string(buffer[:n])
-		fmt.Println("Received:", cmd)
 
 		cmdParser := parser(cmd)
 
-		if cmdParser[0] == "ECHO" {
+		fmt.Println(cmdParser)
+
+		if cmdParser[0] == "ECHO" || cmdParser[0] == "echo" {
 			conn.Write([]byte(cmdParser[1] + "\r\n"))
 			continue
 		}
