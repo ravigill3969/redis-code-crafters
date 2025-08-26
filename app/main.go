@@ -47,7 +47,7 @@ func handleConnection(conn net.Conn) {
 		}
 		cmd := string(buffer[:n])
 
-		cmdParser := parser(cmd)
+		cmdParser := parseRESP(cmd)
 
 		fmt.Println(cmdParser)
 
@@ -66,6 +66,19 @@ func handleConnection(conn net.Conn) {
 
 }
 
-func parser(cmd string) []string {
-	return strings.Fields(cmd)
+func parseRESP(cmd string) []string {
+	var parts []string
+	lines := strings.Split(cmd, "\r\n") // split by CRLF
+
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+		if line[0] == '*' || line[0] == '$' {
+			continue // skip array and bulk string headers
+		}
+		parts = append(parts, line)
+	}
+
+	return parts
 }
