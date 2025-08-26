@@ -76,7 +76,7 @@ func handleConnection(conn net.Conn) {
 				if res == "" {
 					conn.Write([]byte("$-1\r\n"))
 				} else {
-					conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(res), res)))
+					fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(res), res)
 				}
 			} else {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
