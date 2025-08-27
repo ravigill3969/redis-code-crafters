@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
@@ -13,7 +15,9 @@ var _ = net.Listen
 var _ = os.Exit
 
 // global map shared across all connections
-var redisGetSet = make(map[string]string)
+var redisKeyValueStore = make(map[string]string)
+
+var redisKeyExpiryTime = make(map[string]time.Time)
 
 // optional mutex for concurrent access
 var mu sync.RWMutex
@@ -24,8 +28,8 @@ func main() {
 
 	// Uncomment this block to pass the first stage
 
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
-	// l, err := net.Listen("tcp", "127.0.0.1:6380")
+	// l, err := net.Listen("tcp", "0.0.0.0:6379")
+	l, err := net.Listen("tcp", "127.0.0.1:6380")
 
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
@@ -57,7 +61,9 @@ func handleConnection(conn net.Conn) {
 
 		cmdParser := parseRESP(cmd)
 
-		// redisGetSet := map[string]string{}
+		if len(cmdParser) == 0 {
+			continue
+		}
 
 		switch strings.ToUpper(cmdParser[0]) {
 		case "PING":
@@ -73,19 +79,41 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 				break
 			}
-			redisGetSet[cmdParser[1]] = cmdParser[2]
+			redisKeyValueStore[cmdParser[1]] = cmdParser[2]
 			conn.Write([]byte("+OK\r\n"))
+
+			if len(cmdParser) > 3 && cmdParser[3] == "px" {
+				msStr := cmdParser[4]
+				ms, err := strconv.ParseInt(msStr, 10, 64)
+				if err != nil {
+					panic(err)
+				}
+
+				t := time.Now().Add(time.Duration(ms) * time.Millisecond)
+
+				redisKeyExpiryTime[cmdParser[1]] = t
+			}
 
 		case "GET":
 			if len(cmdParser) < 2 {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 				break
 			}
-			value, ok := redisGetSet[cmdParser[1]]
+
+			if redisKeyExpiryTime[cmdParser[1]].Before(time.Now()) {
+				delete(redisKeyExpiryTime, cmdParser[1])
+				delete(redisKeyValueStore, cmdParser[1])
+			}
+
+			value, ok := redisKeyValueStore[cmdParser[1]]
+
+			fmt.Println(redisKeyExpiryTime)
+			fmt.Println(redisKeyValueStore)
+
 			if !ok {
 				conn.Write([]byte("$-1\r\n"))
 			} else {
-				conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)))
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(value), value)
 			}
 
 		default:
@@ -98,16 +126,18 @@ func handleConnection(conn net.Conn) {
 
 func parseRESP(cmd string) []string {
 	var parts []string
-	lines := strings.Split(cmd, "\r\n") // split by CRLF
+	lines := strings.SplitSeq(cmd, "\r\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		if len(line) == 0 {
 			continue
 		}
 		if line[0] == '*' || line[0] == '$' {
 			continue
 		}
-		parts = append(parts, line)
+
+		words := strings.Fields(line)
+		parts = append(parts, words...)
 	}
 
 	return parts
