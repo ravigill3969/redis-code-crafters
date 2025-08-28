@@ -121,7 +121,7 @@ func handleConnection(conn net.Conn) {
 			if !ok {
 				conn.Write([]byte("$-1\r\n"))
 			} else {
-				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(value), value)
+				fmt.Fprintf(conn, ":%d\r\n%s\r\n", len(value), value)
 			}
 
 		case "RPUSH":

@@ -3,7 +3,7 @@ package handlers
 var RedisKeyArrayStore = map[string][]string{}
 
 func RPUSH(cmd []string) (int, error) {
-	RedisKeyArrayStore[cmd[1]] = append(RedisKeyArrayStore[cmd[1]], cmd[2])
+	RedisKeyArrayStore[cmd[0]] = append(RedisKeyArrayStore[cmd[0]], cmd[1])
 
 	return len(RedisKeyArrayStore[cmd[1]]), nil
 }
