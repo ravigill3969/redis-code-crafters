@@ -2,24 +2,9 @@ package handlers
 
 import "strconv"
 
-type RESPType int
-
-const (
-	SimpleString RESPType = iota
-	Error
-	Integer
-	BulkString
-	Array
-)
-
-type RESPValue struct {
-	Type  RESPType
-	Value interface{}
-}
-
 var RedisKeyArrayStore = map[string][]string{}
 
-func RPUSH(cmd []string) (int, error) {
+func RPUSH(cmd []interface) (int, error) {
 	key := cmd[0]
 	values := cmd[1:]
 	RedisKeyArrayStore[key] = append(RedisKeyArrayStore[key], values...)

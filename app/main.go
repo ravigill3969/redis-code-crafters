@@ -17,7 +17,7 @@ var _ = net.Listen
 var _ = os.Exit
 
 // global map shared across all connections
-var redisKeyValueStore = make(map[string]string)
+var redisKeyValueStore = make(map[string]interface{})
 
 var redisKeyExpiryTime = make(map[string]time.Time)
 
@@ -61,18 +61,18 @@ func handleConnection(conn net.Conn) {
 		}
 		cmd := string(buffer[:n])
 
-		cmdParser := parseRESP(cmd)
+		cmdParser := ParseRESP(cmd)
 
 		if len(cmdParser) == 0 {
 			continue
 		}
 
-		switch strings.ToUpper(cmdParser[0]) {
+		switch strings.ToUpper(cmdParser[0].(string)) {
 		case "PING":
 			conn.Write([]byte("+PONG\r\n"))
 		case "ECHO":
 			if len(cmdParser) > 1 {
-				conn.Write([]byte("+" + cmdParser[1] + "\r\n"))
+				conn.Write([]byte("+" + cmdParser[1].(string) + "\r\n"))
 			} else {
 				conn.Write([]byte("+\r\n"))
 			}
@@ -81,18 +81,18 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 				break
 			}
-			redisKeyValueStore[cmdParser[1]] = cmdParser[2]
+			redisKeyValueStore[cmdParser[1].(string)] = cmdParser[2]
 
 			if len(cmdParser) > 3 && cmdParser[3] == "px" {
 				msStr := cmdParser[4]
-				ms, err := strconv.ParseInt(msStr, 10, 64)
+				ms, err := strconv.ParseInt(msStr.(string), 10, 64)
 				if err != nil {
 					panic(err)
 				}
 
 				t := time.Now().Add(time.Duration(ms) * time.Millisecond)
 
-				redisKeyExpiryTime[cmdParser[1]] = t
+				redisKeyExpiryTime[cmdParser[1].(string)] = t
 			}
 
 			conn.Write([]byte("+OK\r\n"))
@@ -105,12 +105,12 @@ func handleConnection(conn net.Conn) {
 
 			key := cmdParser[1]
 
-			if expiry, ok := redisKeyExpiryTime[key]; ok && expiry.Before(time.Now()) {
-				delete(redisKeyExpiryTime, key)
-				delete(redisKeyValueStore, key)
+			if expiry, ok := redisKeyExpiryTime[key.(string)]; ok && expiry.Before(time.Now()) {
+				delete(redisKeyExpiryTime, key.(string))
+				delete(redisKeyValueStore, key.(string))
 			}
 
-			value, ok := redisKeyValueStore[key]
+			value, ok := redisKeyValueStore[key.(string)]
 			if !ok {
 				conn.Write([]byte("$-1\r\n"))
 			} else {
@@ -136,13 +136,13 @@ func handleConnection(conn net.Conn) {
 				return
 			}
 
-			res, err := handlers.LRANGE(cmdParser[1:])
+			// res, err := handlers.LRANGE(cmdParser[1:])
 
-			if err != nil {
-				conn.Write([]byte("*0\r\n"))
-			} else {
-				fmt.Fprintf(conn, ":%d\r\n", res)
-			}
+			// if err != nil {
+			// 	conn.Write([]byte("*0\r\n"))
+			// }
+
+			// fmt.Println(res)
 
 		default:
 			conn.Write([]byte("+Unknown command\r\n"))
@@ -152,21 +152,56 @@ func handleConnection(conn net.Conn) {
 
 }
 
-func parseRESP(cmd string) []string {
-	var parts []string
-	lines := strings.SplitSeq(cmd, "\r\n")
+// func parseRESP(cmd string) []string {
+// 	var parts []string
+// 	lines := strings.SplitSeq(cmd, "\r\n")
 
-	for line := range lines {
-		if len(line) == 0 {
-			continue
-		}
-		if line[0] == '*' || line[0] == '$' {
-			continue
-		}
+// 	for line := range lines {
+// 		if len(line) == 0 {
+// 			continue
+// 		}
+// 		if line[0] == '*' || line[0] == '$' {
+// 			continue
+// 		}
 
-		words := strings.Fields(line)
-		parts = append(parts, words...)
+// 		words := strings.Fields(line)
+// 		parts = append(parts, words...)
+// 	}
+
+// 	return parts
+// }
+
+func tokenizeRESP(raw string) []string {
+
+	clean := strings.ReplaceAll(raw, "\r\n", "\n")
+
+	lines := strings.Split(clean, "\n")
+
+	tokens := []string{}
+	for _, line := range lines {
+		if line != "" {
+			tokens = append(tokens, line)
+		}
 	}
 
-	return parts
+	return tokens
+}
+
+func ParseRESP(raw string) []interface{} {
+	tokenizeRESPReturnVal := tokenizeRESP(raw)
+
+	var cmd []interface{}
+
+	for _, t := range tokenizeRESPReturnVal {
+		if t[0] == '*' || t[0] == '$' {
+			continue
+		}
+
+		if n, err := strconv.Atoi(t); err == nil {
+			cmd = append(cmd, n)
+		} else {
+			cmd = append(cmd, t)
+		}
+	}
+	return cmd
 }
