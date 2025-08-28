@@ -28,8 +28,8 @@ func main() {
 
 	// Uncomment this block to pass the first stage
 
-	// l, err := net.Listen("tcp", "0.0.0.0:6379")
-	l, err := net.Listen("tcp", "127.0.0.1:6380")
+	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	// l, err := net.Listen("tcp", "127.0.0.1:6380")
 
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
