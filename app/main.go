@@ -130,6 +130,20 @@ func handleConnection(conn net.Conn) {
 				fmt.Fprintf(conn, ":%d\r\n", len)
 			}
 
+		case "LRANGE":
+			if len(cmdParser) < 3 {
+				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
+				return
+			}
+
+			res, err := handlers.LRANGE(cmdParser[1:])
+
+			if err != nil {
+				conn.Write([]byte("*0\r\n"))
+			} else {
+				fmt.Fprintf(conn, ":%d\r\n", res)
+			}
+
 		default:
 			conn.Write([]byte("+Unknown command\r\n"))
 		}
