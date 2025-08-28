@@ -28,8 +28,8 @@ func main() {
 
 	// Uncomment this block to pass the first stage
 
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
-	// l, err := net.Listen("tcp", "127.0.0.1:6380")
+	// l, err := net.Listen("tcp", "0.0.0.0:6379")
+	l, err := net.Listen("tcp", "127.0.0.1:6380")
 
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
@@ -80,7 +80,6 @@ func handleConnection(conn net.Conn) {
 				break
 			}
 			redisKeyValueStore[cmdParser[1]] = cmdParser[2]
-			conn.Write([]byte("+OK\r\n"))
 
 			if len(cmdParser) > 3 && cmdParser[3] == "px" {
 				msStr := cmdParser[4]
@@ -94,13 +93,26 @@ func handleConnection(conn net.Conn) {
 				redisKeyExpiryTime[cmdParser[1]] = t
 			}
 
+			fmt.Println(redisKeyExpiryTime)
+			fmt.Println(redisKeyValueStore)
+
+			conn.Write([]byte("+OK\r\n"))
+
 		case "GET":
 			if len(cmdParser) < 2 {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 				break
 			}
 
-			if redisKeyExpiryTime[cmdParser[1]].Before(time.Now()) {
+			val, ok := redisKeyExpiryTime[cmdParser[1]]
+
+			checkExpiry := false
+
+			if ok {
+				checkExpiry = true
+			}
+
+			if checkExpiry && val.Before(time.Now()) {
 				delete(redisKeyExpiryTime, cmdParser[1])
 				delete(redisKeyValueStore, cmdParser[1])
 			}
