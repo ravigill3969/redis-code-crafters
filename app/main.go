@@ -99,29 +99,22 @@ func handleConnection(conn net.Conn) {
 
 		case "GET":
 			if len(cmdParser) < 2 {
-				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
+				conn.Write([]byte("-ERR wrong number of arguments for 'GET'\r\n"))
 				break
 			}
 
-			val, ok := redisKeyExpiryTime[cmdParser[1]]
+			key := cmdParser[1]
 
-			checkExpiry := false
-
-			if ok {
-				checkExpiry = true
+			if expiry, ok := redisKeyExpiryTime[key]; ok && expiry.Before(time.Now()) {
+				delete(redisKeyExpiryTime, key)
+				delete(redisKeyValueStore, key)
 			}
 
-			if checkExpiry && val.Before(time.Now()) {
-				delete(redisKeyExpiryTime, cmdParser[1])
-				delete(redisKeyValueStore, cmdParser[1])
-			}
-
-			value, ok := redisKeyValueStore[cmdParser[1]]
-
+			value, ok := redisKeyValueStore[key]
 			if !ok {
 				conn.Write([]byte("$-1\r\n"))
 			} else {
-				fmt.Fprintf(conn, ":%d\r\n%s\r\n", len(value), value)
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(value), value)
 			}
 
 		case "RPUSH":
