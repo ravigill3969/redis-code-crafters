@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/codecrafters-io/redis-starter-go/app/handlers"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
@@ -93,9 +95,6 @@ func handleConnection(conn net.Conn) {
 				redisKeyExpiryTime[cmdParser[1]] = t
 			}
 
-			fmt.Println(redisKeyExpiryTime)
-			fmt.Println(redisKeyValueStore)
-
 			conn.Write([]byte("+OK\r\n"))
 
 		case "GET":
@@ -119,13 +118,23 @@ func handleConnection(conn net.Conn) {
 
 			value, ok := redisKeyValueStore[cmdParser[1]]
 
-			fmt.Println(redisKeyExpiryTime)
-			fmt.Println(redisKeyValueStore)
-
 			if !ok {
 				conn.Write([]byte("$-1\r\n"))
 			} else {
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(value), value)
+			}
+
+		case "RPUSH":
+			if len(cmdParser) < 3 {
+				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
+				break
+			}
+			len, err := handlers.RPUSH(cmdParser[1:])
+
+			if err != nil {
+				conn.Write([]byte("$-1\r\n"))
+			} else {
+				fmt.Fprintf(conn, ":%d\r\n", len)
 			}
 
 		default:
