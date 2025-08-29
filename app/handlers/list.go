@@ -38,7 +38,7 @@ func LRANGE(cmd []interface{}) ([]string, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 	list, ok := RedisListStore[key]
-	if !ok || start > end || start >= len(list) {
+	if !ok {
 		return []string{}, nil
 	}
 
