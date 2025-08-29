@@ -127,7 +127,7 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
-// Simple RESP parser
+
 func tokenizeRESP(raw string) []string {
 	clean := strings.ReplaceAll(raw, "\r\n", "\n")
 	lines := strings.Split(clean, "\n")

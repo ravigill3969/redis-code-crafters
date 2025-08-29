@@ -61,3 +61,20 @@ func LRANGE(cmd []interface{}) ([]string, error) {
 
 	return list[start : end+1], nil
 }
+
+func LPUSH(cmd []interface{}) (int, error) {
+	if len(cmd) < 2 {
+		return 0, fmt.Errorf("wrong number of arguments")
+	}
+	key := fmt.Sprintf("%v", cmd[0])
+	values := cmd[1:]
+
+	mu.Lock()
+	defer mu.Unlock()
+	for _, v := range values {
+		RedisListStore[key] = append([]string{fmt.Sprintf("%v", v)}, RedisListStore[key]...)
+	}
+
+	return len(RedisListStore[key]), nil
+
+}
