@@ -42,12 +42,5 @@ func LRANGE(cmd []interface{}) ([]string, error) {
 		return []string{}, nil
 	}
 
-	if start < 0 {
-		start = 0
-	}
-	if end >= len(list) {
-		end = len(list) - 1
-	}
-
 	return list[start : end+1], nil
 }
