@@ -120,13 +120,18 @@ func handleConnection(conn net.Conn) {
 					fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(v), v)
 				}
 			}
-
+		case "LPUSH":
+			length, err := handlers.LPUSH(cmdParser[1:])
+			if err != nil {
+				conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
+			} else {
+				fmt.Fprintf(conn, ":%d\r\n", length)
+			}
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 		}
 	}
 }
-
 
 func tokenizeRESP(raw string) []string {
 	clean := strings.ReplaceAll(raw, "\r\n", "\n")
