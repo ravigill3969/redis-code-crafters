@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,38 +11,25 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/handlers"
 )
 
-// Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
-var _ = net.Listen
-var _ = os.Exit
-
-// global map shared across all connections
+// Global store
 var redisKeyValueStore = make(map[string]interface{})
-
 var redisKeyExpiryTime = make(map[string]time.Time)
-
-// optional mutex for concurrent access
+var redisListStore = make(map[string][]string)
 var mu sync.RWMutex
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
-
-	// Uncomment this block to pass the first stage
-
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
-	// l, err := net.Listen("tcp", "127.0.0.1:6380")
-
 	if err != nil {
-		fmt.Println("Failed to bind to port 6379")
-		os.Exit(1)
+		fmt.Println("Failed to bind port:", err)
+		return
 	}
+	fmt.Println("Server listening on 6379")
+
 	for {
-
 		conn, err := l.Accept()
-
 		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
-			os.Exit(1)
+			fmt.Println("Error accepting connection:", err)
+			continue
 		}
 		go handleConnection(conn)
 	}
@@ -51,28 +37,25 @@ func main() {
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
-	buffer := make([]byte, 1024)
-	for {
+	buffer := make([]byte, 4096)
 
+	for {
 		n, err := conn.Read(buffer)
 		if err != nil {
-			conn.Write([]byte("+Unable to read from request\r\n"))
 			return
 		}
-		cmd := string(buffer[:n])
-
-		cmdParser := ParseRESP(cmd)
-
+		raw := string(buffer[:n])
+		cmdParser := ParseRESP(raw)
 		if len(cmdParser) == 0 {
 			continue
 		}
 
-		switch strings.ToUpper(cmdParser[0].(string)) {
+		switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) {
 		case "PING":
 			conn.Write([]byte("+PONG\r\n"))
 		case "ECHO":
 			if len(cmdParser) > 1 {
-				conn.Write([]byte("+" + cmdParser[1].(string) + "\r\n"))
+				conn.Write([]byte("+" + fmt.Sprintf("%v", cmdParser[1]) + "\r\n"))
 			} else {
 				conn.Write([]byte("+\r\n"))
 			}
@@ -81,122 +64,89 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 				break
 			}
-			redisKeyValueStore[cmdParser[1].(string)] = cmdParser[2]
+			key := fmt.Sprintf("%v", cmdParser[1])
+			value := cmdParser[2]
 
-			if len(cmdParser) > 3 && cmdParser[3] == "px" {
-				msStr := cmdParser[4]
-				ms, err := strconv.ParseInt(msStr.(string), 10, 64)
-				if err != nil {
-					panic(err)
-				}
+			mu.Lock()
+			redisKeyValueStore[key] = value
 
-				t := time.Now().Add(time.Duration(ms) * time.Millisecond)
-
-				redisKeyExpiryTime[cmdParser[1].(string)] = t
+			// PX expiration optional
+			if len(cmdParser) > 3 && strings.ToUpper(fmt.Sprintf("%v", cmdParser[3])) == "PX" {
+				ms, _ := strconv.Atoi(fmt.Sprintf("%v", cmdParser[4]))
+				redisKeyExpiryTime[key] = time.Now().Add(time.Duration(ms) * time.Millisecond)
 			}
-
+			mu.Unlock()
 			conn.Write([]byte("+OK\r\n"))
 
 		case "GET":
 			if len(cmdParser) < 2 {
-				conn.Write([]byte("-ERR wrong number of arguments for 'GET'\r\n"))
+				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 				break
 			}
+			key := fmt.Sprintf("%v", cmdParser[1])
 
-			key := cmdParser[1]
-
-			if expiry, ok := redisKeyExpiryTime[key.(string)]; ok && expiry.Before(time.Now()) {
-				delete(redisKeyExpiryTime, key.(string))
-				delete(redisKeyValueStore, key.(string))
+			mu.Lock()
+			// Check expiration
+			if expiry, ok := redisKeyExpiryTime[key]; ok && expiry.Before(time.Now()) {
+				delete(redisKeyExpiryTime, key)
+				delete(redisKeyValueStore, key)
 			}
 
-			value, ok := redisKeyValueStore[key.(string)]
+			value, ok := redisKeyValueStore[key]
+			mu.Unlock()
+
 			if !ok {
 				conn.Write([]byte("$-1\r\n"))
 			} else {
-				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(value), value)
+				valStr := fmt.Sprintf("%v", value)
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(valStr), valStr)
 			}
 
 		case "RPUSH":
-			if len(cmdParser) < 3 {
-				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
-				break
-			}
-			len, err := handlers.RPUSH(cmdParser[1:])
-
+			length, err := handlers.RPUSH(cmdParser[1:])
 			if err != nil {
-				conn.Write([]byte("$-1\r\n"))
+				conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
 			} else {
-				fmt.Fprintf(conn, ":%d\r\n", len)
+				fmt.Fprintf(conn, ":%d\r\n", length)
 			}
 
 		case "LRANGE":
-			if len(cmdParser) < 3 {
-				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
-				return
+			res, err := handlers.LRANGE(cmdParser[1:])
+			if err != nil {
+				conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
+			} else {
+				fmt.Fprintf(conn, "*%d\r\n", len(res))
+				for _, v := range res {
+					fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(v), v)
+				}
 			}
 
-			// res, err := handlers.LRANGE(cmdParser[1:])
-
-			// if err != nil {
-			// 	conn.Write([]byte("*0\r\n"))
-			// }
-
-			// fmt.Println(res)
-
 		default:
-			conn.Write([]byte("+Unknown command\r\n"))
+			conn.Write([]byte("-ERR unknown command\r\n"))
 		}
-
 	}
-
 }
 
-// func parseRESP(cmd string) []string {
-// 	var parts []string
-// 	lines := strings.SplitSeq(cmd, "\r\n")
-
-// 	for line := range lines {
-// 		if len(line) == 0 {
-// 			continue
-// 		}
-// 		if line[0] == '*' || line[0] == '$' {
-// 			continue
-// 		}
-
-// 		words := strings.Fields(line)
-// 		parts = append(parts, words...)
-// 	}
-
-// 	return parts
-// }
-
+// Simple RESP parser
 func tokenizeRESP(raw string) []string {
-
 	clean := strings.ReplaceAll(raw, "\r\n", "\n")
-
 	lines := strings.Split(clean, "\n")
-
 	tokens := []string{}
 	for _, line := range lines {
 		if line != "" {
 			tokens = append(tokens, line)
 		}
 	}
-
 	return tokens
 }
 
 func ParseRESP(raw string) []interface{} {
-	tokenizeRESPReturnVal := tokenizeRESP(raw)
-
-	var cmd []interface{}
-
-	for _, t := range tokenizeRESPReturnVal {
+	lines := tokenizeRESP(raw)
+	cmd := []interface{}{}
+	for _, t := range lines {
 		if t[0] == '*' || t[0] == '$' {
 			continue
 		}
-
 		if n, err := strconv.Atoi(t); err == nil {
 			cmd = append(cmd, n)
 		} else {

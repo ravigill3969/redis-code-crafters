@@ -1,44 +1,53 @@
 package handlers
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+	"sync"
+)
 
-var RedisKeyArrayStore = map[string][]string{}
+var mu sync.RWMutex
+var RedisListStore = map[string][]string{}
 
-func RPUSH(cmd []interface) (int, error) {
-	key := cmd[0]
+func RPUSH(cmd []interface{}) (int, error) {
+	if len(cmd) < 2 {
+		return 0, fmt.Errorf("wrong number of arguments")
+	}
+
+	key := fmt.Sprintf("%v", cmd[0])
 	values := cmd[1:]
-	RedisKeyArrayStore[key] = append(RedisKeyArrayStore[key], values...)
 
-	return len(RedisKeyArrayStore[key]), nil
+	mu.Lock()
+	defer mu.Unlock()
+	for _, v := range values {
+		RedisListStore[key] = append(RedisListStore[key], fmt.Sprintf("%v", v))
+	}
+
+	return len(RedisListStore[key]), nil
 }
 
-func LRANGE(cmd []string) ([]string, error) {
-	key := cmd[0]
-	startIndex := cmd[1]
-	endIndex := cmd[2]
-
-	var res []string
-
-	value, ok := RedisKeyArrayStore[key]
-
-	startIndexToInt, err := strconv.Atoi(startIndex)
-	endIndexToInt, err := strconv.Atoi(endIndex)
-
-	if err != nil {
-		return res, err
+func LRANGE(cmd []interface{}) ([]string, error) {
+	if len(cmd) < 3 {
+		return nil, fmt.Errorf("wrong number of arguments")
 	}
 
-	if startIndexToInt > endIndexToInt || !ok || len(value) < startIndexToInt {
-		return res, nil
+	key := fmt.Sprintf("%v", cmd[0])
+	start, _ := strconv.Atoi(fmt.Sprintf("%v", cmd[1]))
+	end, _ := strconv.Atoi(fmt.Sprintf("%v", cmd[2]))
+
+	mu.RLock()
+	defer mu.RUnlock()
+	list, ok := RedisListStore[key]
+	if !ok || start > end || start >= len(list) {
+		return []string{}, nil
 	}
 
-	for startIndexToInt < endIndexToInt {
-		if startIndexToInt >= len(value) {
-			break
-		}
-		res = append(res, value[startIndexToInt])
-		startIndexToInt++
+	if start < 0 {
+		start = 0
+	}
+	if end >= len(list) {
+		end = len(list) - 1
 	}
 
-	return res, nil
+	return list[start : end+1], nil
 }
