@@ -127,6 +127,10 @@ func handleConnection(conn net.Conn) {
 			} else {
 				fmt.Fprintf(conn, ":%d\r\n", length)
 			}
+		case "LLEN":
+			length := handlers.LLEN(cmdParser[1:])
+
+			fmt.Fprintf(conn, ":%d\r\n", length)
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 		}

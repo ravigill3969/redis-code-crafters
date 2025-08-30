@@ -81,3 +81,15 @@ func LPUSH(cmd []interface{}) (int, error) {
 	return len(RedisListStore[key]), nil
 
 }
+
+func LLEN(cmd []interface{}) int {
+	key := cmd[0].(string)
+
+	val, ok := RedisListStore[key]
+
+	if !ok {
+		return 0
+	}
+
+	return len(val)
+}
