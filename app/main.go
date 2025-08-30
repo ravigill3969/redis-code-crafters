@@ -144,9 +144,10 @@ func handleConnection(conn net.Conn) {
 			if bool {
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(str), str)
 
-			}
+			} else {
 
-			fmt.Fprintf(conn, "$%d\r\n", -1)
+				fmt.Fprintf(conn, "$%d\r\n", -1)
+			}
 
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
