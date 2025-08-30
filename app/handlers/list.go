@@ -97,31 +97,32 @@ func LLEN(cmd []interface{}) int {
 }
 
 func LPOP(cmd []interface{}) ([]string, bool) {
-	key := cmd[0].(string)
+	if len(cmd) < 1 {
+		return nil, false
+	}
 
-	var loop int
-	if val, ok := cmd[1].(int); ok {
-		loop = val
-	} else {
-		loop = 1
+	key := fmt.Sprintf("%v", cmd[0])
+
+	loop := 1
+	if len(cmd) > 1 { 
+		if val, ok := cmd[1].(int); ok && val > 0 {
+			loop = val
+		}
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
 
-	var res []string
-
 	list, ok := RedisListStore[key]
 	if !ok || len(list) == 0 {
-		return res, false
+		return nil, false
 	}
 
 	if loop > len(list) {
-		loop = len(list) 
+		loop = len(list)
 	}
 
-	res = list[:loop]
-
+	res := list[:loop]
 	RedisListStore[key] = list[loop:]
 	return res, true
 }
