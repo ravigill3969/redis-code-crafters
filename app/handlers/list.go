@@ -59,7 +59,6 @@ func LRANGE(cmd []interface{}) ([]string, error) {
 		end = length - 1
 	}
 
-	fmt.Println(list)
 	return list[start : end+1], nil
 }
 
@@ -100,7 +99,7 @@ func LPOP(cmd []interface{}) (string, bool) {
 
 	mu.RLock()
 	defer mu.RUnlock()
-	
+
 	list, ok := RedisListStore[key]
 	if !ok || len(list) == 0 {
 		return "", false

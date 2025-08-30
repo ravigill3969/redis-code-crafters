@@ -50,6 +50,8 @@ func handleConnection(conn net.Conn) {
 			continue
 		}
 
+		fmt.Println(cmdParser...)
+
 		switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) {
 		case "PING":
 			conn.Write([]byte("+PONG\r\n"))
@@ -116,16 +118,12 @@ func handleConnection(conn net.Conn) {
 			if err != nil {
 				conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
 			} else {
-				if len(res) == 0 {
-					conn.Write([]byte("*0\r\n"))
-					return
-				}
 				fmt.Fprintf(conn, "*%d\r\n", len(res))
 				for _, v := range res {
-					s := fmt.Sprintf("%v", v)
-					fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(s), s)
+					fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(v), v)
 				}
 			}
+			
 
 		case "LPUSH":
 			length, err := handlers.LPUSH(cmdParser[1:])
