@@ -59,6 +59,7 @@ func handleConnection(conn net.Conn) {
 			} else {
 				conn.Write([]byte("+\r\n"))
 			}
+
 		case "SET":
 			if len(cmdParser) < 3 {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
@@ -120,6 +121,7 @@ func handleConnection(conn net.Conn) {
 					fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(v), v)
 				}
 			}
+
 		case "LPUSH":
 			length, err := handlers.LPUSH(cmdParser[1:])
 			if err != nil {
@@ -127,10 +129,18 @@ func handleConnection(conn net.Conn) {
 			} else {
 				fmt.Fprintf(conn, ":%d\r\n", length)
 			}
+
 		case "LLEN":
 			length := handlers.LLEN(cmdParser[1:])
 
 			fmt.Fprintf(conn, ":%d\r\n", length)
+
+		case "LPOP":
+
+			res := handlers.LPOP(cmdParser[1:])
+
+			fmt.Fprintf(conn, "%d/r/n", res)
+
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 		}

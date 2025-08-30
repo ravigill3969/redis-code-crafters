@@ -93,3 +93,20 @@ func LLEN(cmd []interface{}) int {
 
 	return len(val)
 }
+
+func LPOP(cmd []interface{}) int {
+	list, ok := RedisListStore[cmd[0].(string)]
+
+	if len(list) < 1 {
+		return -1
+	}
+
+	if !ok {
+		return -1
+	}
+
+	last := list[1:]
+
+	return len(last)
+
+}
