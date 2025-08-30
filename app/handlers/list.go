@@ -94,19 +94,21 @@ func LLEN(cmd []interface{}) int {
 	return len(val)
 }
 
-func LPOP(cmd []interface{}) int {
+func LPOP(cmd []interface{}) (int, string) {
 	list, ok := RedisListStore[cmd[0].(string)]
 
 	if len(list) < 1 {
-		return -1
+		return -1, ""
 	}
 
 	if !ok {
-		return -1
+		return -1, ""
 	}
 
-	last := list[1:]
+	first := list[0]
 
-	return len(last)
+	RedisListStore[cmd[0].(string)] = RedisListStore[cmd[0].(string)][1:]
+
+	return 0, first
 
 }

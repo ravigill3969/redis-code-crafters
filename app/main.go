@@ -137,9 +137,14 @@ func handleConnection(conn net.Conn) {
 
 		case "LPOP":
 
-			res := handlers.LPOP(cmdParser[1:])
+			errRes, val := handlers.LPOP(cmdParser[1:])
 
-			fmt.Fprintf(conn, "$%d\r\n", res)
+			if val != "" {
+				fmt.Fprintf(conn, "$%s\r\n", val)
+				return
+			}
+
+			fmt.Fprintf(conn, "$%d\r\n", errRes)
 
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
