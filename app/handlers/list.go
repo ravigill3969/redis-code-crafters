@@ -117,7 +117,7 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 	}
 
 	if loop > len(list) {
-		loop = len(list)
+		loop = len(list) - 1
 	}
 
 	res = list[:loop]
