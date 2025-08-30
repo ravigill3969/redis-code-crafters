@@ -164,6 +164,8 @@ func tokenizeRESP(raw string) []string {
 			tokens = append(tokens, line)
 		}
 	}
+
+	fmt.Println(tokens)
 	return tokens
 }
 
