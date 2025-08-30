@@ -139,7 +139,7 @@ func handleConnection(conn net.Conn) {
 
 			res := handlers.LPOP(cmdParser[1:])
 
-			fmt.Fprintf(conn, "%d/r/n", res)
+			fmt.Fprintf(conn, "$%d/r/n", res)
 
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
