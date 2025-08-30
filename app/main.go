@@ -165,7 +165,6 @@ func tokenizeRESP(raw string) []string {
 		}
 	}
 
-	fmt.Println(tokens)
 	return tokens
 }
 
@@ -182,5 +181,8 @@ func ParseRESP(raw string) []interface{} {
 			cmd = append(cmd, t)
 		}
 	}
+
+		fmt.Println(cmd)
+
 	return cmd
 }
