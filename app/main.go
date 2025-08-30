@@ -116,9 +116,14 @@ func handleConnection(conn net.Conn) {
 			if err != nil {
 				conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
 			} else {
+				if len(res) == 0 {
+					conn.Write([]byte("*0\r\n"))
+					return
+				}
 				fmt.Fprintf(conn, "*%d\r\n", len(res))
 				for _, v := range res {
-					fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(v), v)
+					s := fmt.Sprintf("%v", v)
+					fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(s), s)
 				}
 			}
 
