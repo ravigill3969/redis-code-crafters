@@ -123,7 +123,6 @@ func handleConnection(conn net.Conn) {
 					fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(v), v)
 				}
 			}
-			
 
 		case "LPUSH":
 			length, err := handlers.LPUSH(cmdParser[1:])
@@ -144,7 +143,7 @@ func handleConnection(conn net.Conn) {
 
 			if bool {
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(str), str)
-				return
+
 			}
 
 			fmt.Fprintf(conn, "$%d\r\n", -1)
@@ -182,7 +181,7 @@ func ParseRESP(raw string) []interface{} {
 		}
 	}
 
-		fmt.Println(cmd)
+	fmt.Println(cmd)
 
 	return cmd
 }
