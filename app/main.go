@@ -142,7 +142,7 @@ func handleConnection(conn net.Conn) {
 			res, ok := handlers.LPOP(cmdParser[1:])
 
 			if len(res) == 1 {
-				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(res), res[0])
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(res[0]), res[0])
 			} else if ok {
 				fmt.Fprintf(conn, "*%d\r\n", len(res))
 				for _, v := range res {
