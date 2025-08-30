@@ -27,6 +27,7 @@ func RPUSH(cmd []interface{}) (int, error) {
 }
 
 func LRANGE(cmd []interface{}) ([]string, error) {
+	fmt.Println("hit")
 	if len(cmd) < 3 {
 		return nil, fmt.Errorf("wrong number of arguments")
 	}
@@ -100,7 +101,7 @@ func LPOP(cmd []interface{}) (string, bool) {
 
 	mu.RLock()
 	defer mu.RUnlock()
-	
+
 	list, ok := RedisListStore[key]
 	if !ok || len(list) == 0 {
 		return "", false
@@ -108,7 +109,6 @@ func LPOP(cmd []interface{}) (string, bool) {
 
 	first := list[0]
 
-	fmt.Println(list[1:])
 	RedisListStore[key] = list[1:]
 	return first, true
 }
