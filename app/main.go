@@ -139,16 +139,15 @@ func handleConnection(conn net.Conn) {
 
 		case "LPOP":
 
-			str, bool := handlers.LPOP(cmdParser[1:])
+			res, ok := handlers.LPOP(cmdParser[1:])
 
-			if bool {
-				fmt.Fprintf(conn, "*%d\r\n", len(str))
-				for _, v := range str {
+			if ok {
+				fmt.Fprintf(conn, "*%d\r\n", len(res))
+				for _, v := range res {
 					fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(v), v)
 				}
 			} else {
-
-				fmt.Fprintf(conn, "$%d\r\n", -1)
+				fmt.Fprintf(conn, "$-1\r\n")
 			}
 
 		default:
