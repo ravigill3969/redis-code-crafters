@@ -140,7 +140,7 @@ func handleConnection(conn net.Conn) {
 			errRes, val := handlers.LPOP(cmdParser[1:])
 
 			if val != "" {
-				fmt.Fprintf(conn, "$%s\r\n", val)
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(val), val)
 				return
 			}
 
