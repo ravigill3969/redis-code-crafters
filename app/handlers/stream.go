@@ -26,6 +26,10 @@ func XADD(cmd []interface{}) (string, error) {
 
 	ok := isValidID(rstream, id)
 
+	if id == "0-0" {
+		return "", fmt.Errorf("The ID specified in XADD must be greater than 0-0")
+	}
+
 	if !ok {
 		return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
 	}
