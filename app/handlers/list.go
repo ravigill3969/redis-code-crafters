@@ -156,7 +156,8 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 func BLPOP(cmd []interface{}) (string, bool) {
 	mu.Lock()
 	key := cmd[0].(string)
-	timeout, _ := strconv.Atoi(fmt.Sprintf("%v", cmd[1]))
+	timeoutStr := fmt.Sprintf("%v", cmd[1])
+	timeoutSec, _ := strconv.ParseFloat(timeoutStr, 64)
 
 	if _, ok := RedisListStore[key]; !ok {
 		RedisListStore[key] = []string{}
@@ -176,14 +177,14 @@ func BLPOP(cmd []interface{}) (string, bool) {
 	listWaiters.waiters[key] = append(listWaiters.waiters[key], ch)
 	listWaiters.mu.Unlock()
 
-	if timeout == 0 {
+	if timeoutSec == 0 {
 		val := <-ch
 		return val, true
 	} else {
 		select {
 		case val := <-ch:
 			return val, true
-		case <-time.After(time.Duration(timeout) * time.Second):
+		case <-time.After(time.Duration(timeoutSec * float64(time.Second))):
 			return "", false
 		}
 	}
