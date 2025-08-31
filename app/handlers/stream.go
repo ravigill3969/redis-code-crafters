@@ -15,12 +15,12 @@ func XADD(cmd []interface{}) string {
 	// cmd[3:] = field-value pairs
 
 	fmt.Println(cmd...)
-	rstream := fmt.Sprintf("%v", cmd[1])
-	id := fmt.Sprintf("%v", cmd[2])
+	rstream := fmt.Sprintf("%v", cmd[0])
+	id := fmt.Sprintf("%v", cmd[1])
 
 	fields := map[string]string{}
 
-	for i := 3; i < len(cmd); i += 2 {
+	for i := 2; i < len(cmd); i += 2 {
 		key := fmt.Sprintf("%v", cmd[i])
 		if i+1 < len(cmd) {
 			fields[key] = fmt.Sprintf("%v", cmd[i+1])
