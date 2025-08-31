@@ -12,19 +12,32 @@ var redisKeyExpiryTime = make(map[string]time.Time)
 var redisListStore = make(map[string][]string)
 
 func SET(cmd []interface{}) bool {
+	if len(cmd) < 2 {
+		return false // not enough arguments
+	}
 
-	key := fmt.Sprintf("%v", cmd[0])
-	value := cmd[1]
+	key, ok := cmd[0].(string)
+	if !ok {
+		return false
+	}
+
+	value, ok := cmd[1].(string) // ensure value is a string
+	if !ok {
+		return false
+	}
 
 	mu.Lock()
+	defer mu.Unlock()
+
 	redisKeyValueStore[key] = value
 
-	// PX expiration optional
-	if len(cmd) > 3 && strings.ToUpper(fmt.Sprintf("%v", cmd[3])) == "PX" {
-		ms, _ := strconv.Atoi(fmt.Sprintf("%v", cmd[4]))
-		redisKeyExpiryTime[key] = time.Now().Add(time.Duration(ms) * time.Millisecond)
+	if len(cmd) > 3 {
+		if pxStr, ok := cmd[3].(string); ok && strings.ToUpper(pxStr) == "PX" && len(cmd) > 4 {
+			if ms, err := strconv.Atoi(fmt.Sprintf("%v", cmd[4])); err == nil {
+				redisKeyExpiryTime[key] = time.Now().Add(time.Duration(ms) * time.Millisecond)
+			}
+		}
 	}
-	mu.Unlock()
 
 	return true
 }
@@ -45,12 +58,12 @@ func GET(cmd []interface{}) (string, bool) {
 
 	value, exists := redisKeyValueStore[key]
 	if !exists {
-		return "", false // key does not exist
+		return "", false
 	}
 
 	strVal, ok := value.(string)
 	if !ok {
-		return "", false // value is not a string
+		return "", false
 	}
 
 	return strVal, true
