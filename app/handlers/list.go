@@ -20,14 +20,11 @@ var mu sync.RWMutex
 var RedisListStore = map[string][]string{}
 
 func RPUSH(cmd []interface{}) (int, error) {
-	if len(cmd) < 2 {
-		return 0, fmt.Errorf("wrong number of arguments")
-	}
+
 	fmt.Println(cmd...)
 
 	key := fmt.Sprintf("%v", cmd[0])
 	values := cmd[1:]
-
 
 	mu.Lock()
 	for _, v := range values {
@@ -45,6 +42,8 @@ func RPUSH(cmd []interface{}) (int, error) {
 		ch := chans[0]
 		listWaiters.waiters[key] = chans[1:]
 		listWaiters.mu.Unlock()
+
+		fmt.Println(val)
 
 		go func() { ch <- val }()
 	} else {

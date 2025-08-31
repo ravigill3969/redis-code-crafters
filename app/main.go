@@ -18,7 +18,8 @@ var redisListStore = make(map[string][]string)
 var mu sync.RWMutex
 
 func main() {
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	// l, err := net.Listen("tcp", "0.0.0.0:6379")
+	l, err := net.Listen("tcp", "127.0.0.1:6700")
 	if err != nil {
 		fmt.Println("Failed to bind port:", err)
 		return
@@ -155,7 +156,7 @@ func handleConnection(conn net.Conn) {
 			} else {
 				fmt.Fprintf(conn, "$-1\r\n")
 			}
-		
+
 		case "RPUSH":
 			length, err := handlers.RPUSH(cmdParser[1:])
 			if err != nil {
@@ -163,8 +164,9 @@ func handleConnection(conn net.Conn) {
 			} else {
 				fmt.Fprintf(conn, ":%d\r\n", length)
 			}
+
 		case "BLPOP":
-			key := fmt.Sprintf("%s", cmdParser[0])
+			key := fmt.Sprintf("%s", cmdParser[1])
 			val, ok := handlers.BLPOP(cmdParser[1:])
 
 			if ok {
@@ -195,7 +197,11 @@ func tokenizeRESP(raw string) []string {
 }
 
 func ParseRESP(raw string) []interface{} {
+
 	lines := tokenizeRESP(raw)
+
+	fmt.Println("parserdREsp", lines)
+
 	cmd := []interface{}{}
 	for _, t := range lines {
 		if t[0] == '*' || t[0] == '$' {
@@ -208,7 +214,7 @@ func ParseRESP(raw string) []interface{} {
 		}
 	}
 
-	fmt.Println(cmd)
+	fmt.Println("parserdREsp", cmd)
 
 	return cmd
 }
