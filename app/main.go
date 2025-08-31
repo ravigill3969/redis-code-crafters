@@ -21,8 +21,8 @@ var redisKeyTypeStore = make(map[string]string)
 var mu sync.RWMutex
 
 func main() {
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
-	// l, err := net.Listen("tcp", "127.0.0.1:6700")
+	// l, err := net.Listen("tcp", "0.0.0.0:6379")
+	l, err := net.Listen("tcp", "127.0.0.1:6700")
 
 	if err != nil {
 		fmt.Println("Failed to bind port:", err)
@@ -188,16 +188,20 @@ func handleConnection(conn net.Conn) {
 		case "XADD":
 			key := fmt.Sprintf("%s", cmdParser[1])
 			redisKeyTypeStore[key] = "stream"
-			id := handlers.XADD(cmdParser[1:])
+			id, err := handlers.XADD(cmdParser[1:])
 
-			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
+			if err != nil {
+
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
+			} else {
+				fmt.Fprintf(conn, "%s\r\n", err)
+			}
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 
 		}
 	}
 }
-
 func tokenizeRESP(raw string) []string {
 	clean := strings.ReplaceAll(raw, "\r\n", "\n")
 	lines := strings.Split(clean, "\n")
@@ -207,27 +211,29 @@ func tokenizeRESP(raw string) []string {
 			tokens = append(tokens, line)
 		}
 	}
-
 	return tokens
 }
 
+// ParseRESP parses raw RESP2 into []interface{} (all strings)
 func ParseRESP(raw string) []interface{} {
-
 	lines := tokenizeRESP(raw)
-
-	fmt.Println("parserdREsp", lines)
+	fmt.Println(lines)
 
 	cmd := []interface{}{}
+
 	for _, t := range lines {
+		if t == "" {
+			continue
+		}
+		// skip array or bulk length lines
 		if t[0] == '*' || t[0] == '$' {
 			continue
 		}
-		if n, err := strconv.Atoi(t); err == nil {
-			cmd = append(cmd, n)
-		} else {
-			cmd = append(cmd, t)
-		}
+		// keep everything as string
+		cmd = append(cmd, t)
 	}
+
+	fmt.Println(cmd)
 
 	return cmd
 }
