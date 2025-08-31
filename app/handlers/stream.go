@@ -22,7 +22,9 @@ func XADD(cmd []interface{}) string {
 	for i := 3; i < len(cmd); i += 2 {
 		key := fmt.Sprintf("%v", cmd[i])
 
-		fields[key] = cmd[i+1].(string)
+		if i+1 < len(cmd) {
+			fields[key] = fmt.Sprintf("%v", cmd[i+1])
+		}
 	}
 
 	entry := struct {
