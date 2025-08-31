@@ -106,22 +106,18 @@ func handleConnection(conn net.Conn) {
 			key, ok := cmdParser[1].(string)
 			if !ok {
 				fmt.Fprintf(conn, "+none\r\n")
+				break
 			}
 
 			mu.Lock()
 			defer mu.Unlock()
 
-			// Check for expiry
-			expiry, exists := redisKeyExpiryTime[key]
-			if exists && expiry.Before(time.Now()) {
+			if expiry, exists := redisKeyExpiryTime[key]; exists && expiry.Before(time.Now()) {
 				delete(redisKeyExpiryTime, key)
 				delete(redisKeyValueStore, key)
-				fmt.Fprintf(conn, "+none\r\n")
 			}
 
-			_, exists = redisKeyValueStore[key]
-
-			if exists {
+			if _, exists := redisKeyValueStore[key]; exists {
 				fmt.Fprintf(conn, "+string\r\n")
 			} else {
 				fmt.Fprintf(conn, "+none\r\n")
