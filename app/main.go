@@ -21,8 +21,8 @@ var redisKeyTypeStore = make(map[string]string)
 var mu sync.RWMutex
 
 func main() {
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
-	// l, err := net.Listen("tcp", "127.0.0.1:6700")
+	// l, err := net.Listen("tcp", "0.0.0.0:6379")
+	l, err := net.Listen("tcp", "127.0.0.1:6700")
 
 	if err != nil {
 		fmt.Println("Failed to bind port:", err)
@@ -188,13 +188,12 @@ func handleConnection(conn net.Conn) {
 		case "XADD":
 			key := fmt.Sprintf("%s", cmdParser[1])
 			redisKeyTypeStore[key] = "stream"
+
 			id, err := handlers.XADD(cmdParser[1:])
-
 			if err != nil {
-
-				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
+				fmt.Fprintf(conn, "-%s\r\n", err.Error())
 			} else {
-				fmt.Fprintf(conn, "%s\r\n", err)
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
 			}
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
