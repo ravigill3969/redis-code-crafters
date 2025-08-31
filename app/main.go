@@ -73,18 +73,17 @@ func handleConnection(conn net.Conn) {
 			}
 
 		case "GET":
-			if len(cmdParser) < 2 {
+			if len(cmdParser) != 2 {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 				break
 			}
 
-			value, ok := handlers.GET(cmdParser[1:])
+			value, ok := handlers.GET([]interface{}{cmdParser[1]})
 
 			if !ok {
 				conn.Write([]byte("$-1\r\n"))
 			} else {
-				valStr := fmt.Sprintf("%v", value)
-				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(valStr), valStr)
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(value), value)
 			}
 
 		case "TYPE":

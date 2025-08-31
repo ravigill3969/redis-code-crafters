@@ -30,19 +30,26 @@ func SET(cmd []interface{}) bool {
 }
 
 func GET(cmd []interface{}) (string, bool) {
-	key := fmt.Sprintf("%v", cmd[0])
+	key, ok := cmd[0].(string)
+	if !ok {
+		return "", false
+	}
 
 	mu.Lock()
+	defer mu.Unlock()
 
-	if expiry, ok := redisKeyExpiryTime[key]; ok && expiry.Before(time.Now()) {
+	if expiry, exists := redisKeyExpiryTime[key]; exists && expiry.Before(time.Now()) {
 		delete(redisKeyExpiryTime, key)
 		delete(redisKeyValueStore, key)
 	}
 
-	value, ok := redisKeyValueStore[key]
-	mu.Unlock()
+	value, exists := redisKeyValueStore[key]
+	strVal, ok := value.(string)
+	if !ok {
+		return "", false
+	}
 
-	return value.(string), ok
+	return strVal, exists
 }
 
 func TYPE(cmd []interface{}) bool {
