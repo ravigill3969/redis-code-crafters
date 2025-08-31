@@ -180,10 +180,12 @@ func BLPOP(cmd []interface{}) (string, bool) {
 
 	if timeoutSec == 0 {
 		val := <-ch
+		fmt.Println(val)
 		return val, true
 	} else {
 		select {
 		case val := <-ch:
+			fmt.Println(val)
 			return val, true
 		case <-time.After(time.Duration(timeoutSec * float64(time.Second))):
 			return "", false
