@@ -132,8 +132,10 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 
 	loop := 1
 	if len(cmd) > 1 {
-		if val, ok := cmd[1].(int); ok && val > 0 {
-			loop = val
+		if strVal, ok := cmd[1].(string); ok {
+			if val, err := strconv.Atoi(strVal); err == nil && val > 0 {
+				loop = val
+			}
 		}
 	}
 
