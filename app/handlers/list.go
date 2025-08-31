@@ -23,11 +23,11 @@ func RPUSH(cmd []interface{}) (int, error) {
 	if len(cmd) < 2 {
 		return 0, fmt.Errorf("wrong number of arguments")
 	}
+	fmt.Println(cmd...)
 
 	key := fmt.Sprintf("%v", cmd[0])
 	values := cmd[1:]
 
-	fmt.Println(cmd...)
 
 	mu.Lock()
 	for _, v := range values {
