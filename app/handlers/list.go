@@ -35,7 +35,8 @@ func RPUSH(cmd []interface{}) (int, error) {
 	mu.Unlock()
 
 	listWaiters.mu.Lock()
-	if chans, ok := listWaiters.waiters[key]; ok && len(chans) > 0 {
+	chans, ok := listWaiters.waiters[key]
+	if ok && len(chans) > 0 {
 		val := RedisListStore[key][0]
 		RedisListStore[key] = RedisListStore[key][1:]
 
@@ -159,7 +160,7 @@ func BLPOP(cmd []interface{}) (string, bool) {
 
 	values := RedisListStore[key]
 
-	if len(values) > 1 {
+	if len(values) > 0 {
 		val := values[0]
 		list := RedisListStore[key][1:]
 		RedisListStore[key] = list
@@ -167,6 +168,12 @@ func BLPOP(cmd []interface{}) (string, bool) {
 		return val, true
 	}
 
+	mu.Lock()
+	if _, ok := RedisListStore[key]; !ok {
+		RedisListStore[key] = []string{}
+	}
+	mu.Unlock()
+	
 	ch := make(chan string, 1)
 	listWaiters.mu.Lock()
 	listWaiters.waiters[key] = append(listWaiters.waiters[key], ch)

@@ -103,14 +103,6 @@ func handleConnection(conn net.Conn) {
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(valStr), valStr)
 			}
 
-		case "RPUSH":
-			length, err := handlers.RPUSH(cmdParser[1:])
-			if err != nil {
-				conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
-			} else {
-				fmt.Fprintf(conn, ":%d\r\n", length)
-			}
-
 		case "LRANGE":
 			res, err := handlers.LRANGE(cmdParser[1:])
 			if err != nil {
@@ -150,16 +142,24 @@ func handleConnection(conn net.Conn) {
 				fmt.Fprintf(conn, "$-1\r\n")
 			}
 
+		case "RPUSH":
+			length, err := handlers.RPUSH(cmdParser[1:])
+			if err != nil {
+				conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
+			} else {
+				fmt.Fprintf(conn, ":%d\r\n", length)
+			}
+
 		case "BLPOP":
 			val, ok := handlers.BLPOP(cmdParser[1:])
 
 			if ok {
-				key := fmt.Sprintf("%v", cmdParser[1]) // the list name
+				key := fmt.Sprintf("%v", cmdParser[1])
 				fmt.Fprintf(conn, "*2\r\n")
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(key), key)
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(val), val)
 			} else {
-				fmt.Fprintf(conn, "*-1\r\n") // nil array if nothing popped in timeout
+				fmt.Fprintf(conn, "*-1\r\n")
 			}
 
 		default:
