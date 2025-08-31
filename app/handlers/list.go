@@ -152,7 +152,7 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 	return res, true
 }
 
-func BLOP(cmd []interface{}) (string, bool) {
+func BLPOP(cmd []interface{}) (string, bool) {
 	mu.Lock()
 	key := cmd[0].(string)
 	timeout := cmd[1].(int)
