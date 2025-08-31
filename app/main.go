@@ -50,8 +50,6 @@ func handleConnection(conn net.Conn) {
 			continue
 		}
 
-		fmt.Println(cmdParser...)
-
 		switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) {
 		case "PING":
 			conn.Write([]byte("+PONG\r\n"))

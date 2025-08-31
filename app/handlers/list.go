@@ -4,7 +4,17 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 )
+
+type ListWaiters struct {
+	mu      sync.Mutex
+	waiters map[string][]chan string
+}
+
+var listWaiters = ListWaiters{
+	waiters: make(map[string][]chan string),
+}
 
 var mu sync.RWMutex
 var RedisListStore = map[string][]string{}
@@ -18,12 +28,27 @@ func RPUSH(cmd []interface{}) (int, error) {
 	values := cmd[1:]
 
 	mu.Lock()
-	defer mu.Unlock()
 	for _, v := range values {
 		RedisListStore[key] = append(RedisListStore[key], fmt.Sprintf("%v", v))
 	}
+	newLen := len(RedisListStore[key])
+	mu.Unlock()
 
-	return len(RedisListStore[key]), nil
+	listWaiters.mu.Lock()
+	if chans, ok := listWaiters.waiters[key]; ok && len(chans) > 0 {
+		val := RedisListStore[key][0]
+		RedisListStore[key] = RedisListStore[key][1:]
+
+		ch := chans[0]
+		listWaiters.waiters[key] = chans[1:]
+		listWaiters.mu.Unlock()
+
+		go func() { ch <- val }()
+	} else {
+		listWaiters.mu.Unlock()
+	}
+
+	return newLen, nil
 }
 
 func LRANGE(cmd []interface{}) ([]string, error) {
@@ -104,7 +129,7 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 	key := fmt.Sprintf("%v", cmd[0])
 
 	loop := 1
-	if len(cmd) > 1 { 
+	if len(cmd) > 1 {
 		if val, ok := cmd[1].(int); ok && val > 0 {
 			loop = val
 		}
@@ -125,4 +150,38 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 	res := list[:loop]
 	RedisListStore[key] = list[loop:]
 	return res, true
+}
+
+func BLOP(cmd []interface{}) (string, bool) {
+	mu.Lock()
+	key := cmd[0].(string)
+	timeout := cmd[1].(int)
+
+	values := RedisListStore[key]
+
+	if len(values) > 1 {
+		val := values[0]
+		list := RedisListStore[key][1:]
+		RedisListStore[key] = list
+		mu.Unlock()
+		return val, true
+	}
+
+	ch := make(chan string, 1)
+	listWaiters.mu.Lock()
+	listWaiters.waiters[key] = append(listWaiters.waiters[key], ch)
+	listWaiters.mu.Unlock()
+
+	if timeout == 0 {
+		val := <-ch
+		return val, true
+	} else {
+		select {
+		case val := <-ch:
+			return val, true
+		case <-time.After(time.Duration(timeout) * time.Second):
+			return "", false
+		}
+	}
+
 }
