@@ -154,7 +154,7 @@ func handleConnection(conn net.Conn) {
 			val, ok := handlers.BLPOP(cmdParser[1:])
 
 			if ok {
-				key := fmt.Sprintf("%v", cmdParser[0]) // the list name
+				key := fmt.Sprintf("%v", cmdParser[1]) // the list name
 				fmt.Fprintf(conn, "*2\r\n")
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(key), key)
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(val), val)

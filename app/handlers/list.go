@@ -155,7 +155,7 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 func BLPOP(cmd []interface{}) (string, bool) {
 	mu.Lock()
 	key := cmd[0].(string)
-	timeout := cmd[1].(int)
+	timeout, _ := strconv.Atoi(fmt.Sprintf("%v", cmd[1]))
 
 	values := RedisListStore[key]
 
