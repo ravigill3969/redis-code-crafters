@@ -15,6 +15,9 @@ import (
 var redisKeyValueStore = make(map[string]interface{})
 var redisKeyExpiryTime = make(map[string]time.Time)
 var redisListStore = make(map[string][]string)
+
+var redisKeyTypeStore = make(map[string]string)
+
 var mu sync.RWMutex
 
 func main() {
@@ -54,6 +57,7 @@ func handleConnection(conn net.Conn) {
 		switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) {
 		case "PING":
 			conn.Write([]byte("+PONG\r\n"))
+
 		case "ECHO":
 			if len(cmdParser) > 1 {
 				conn.Write([]byte("+" + fmt.Sprintf("%v", cmdParser[1]) + "\r\n"))
@@ -71,6 +75,7 @@ func handleConnection(conn net.Conn) {
 
 			mu.Lock()
 			redisKeyValueStore[key] = value
+			redisKeyTypeStore[key] = "string"
 
 			if len(cmdParser) > 3 && strings.ToUpper(fmt.Sprintf("%v", cmdParser[3])) == "PX" {
 				ms, _ := strconv.Atoi(fmt.Sprintf("%v", cmdParser[4]))
@@ -110,10 +115,10 @@ func handleConnection(conn net.Conn) {
 				break
 			}
 
-			_, exists := redisKeyValueStore[key]
+			val, exists := redisKeyTypeStore[key]
 
 			if exists {
-				fmt.Fprintf(conn, "+string\r\n")
+				fmt.Fprintf(conn, "+%s\r\n", val)
 			} else {
 				fmt.Fprintf(conn, "+none\r\n")
 			}
@@ -130,6 +135,7 @@ func handleConnection(conn net.Conn) {
 			}
 
 		case "LPUSH":
+			redisKeyTypeStore[cmdParser[1].(string)] = "list"
 			length, err := handlers.LPUSH(cmdParser[1:])
 			if err != nil {
 				conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
@@ -158,6 +164,7 @@ func handleConnection(conn net.Conn) {
 			}
 
 		case "RPUSH":
+			redisKeyTypeStore[cmdParser[1].(string)] = "list"
 			length, err := handlers.RPUSH(cmdParser[1:])
 			if err != nil {
 				conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
@@ -177,6 +184,11 @@ func handleConnection(conn net.Conn) {
 				fmt.Fprintf(conn, "*-1\r\n")
 			}
 
+		case "XADD":
+			redisKeyTypeStore[cmdParser[1].(string)] = "stream"
+			id := handlers.XADD(cmdParser[1:])
+
+			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 		}
