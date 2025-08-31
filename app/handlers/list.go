@@ -27,6 +27,8 @@ func RPUSH(cmd []interface{}) (int, error) {
 	key := fmt.Sprintf("%v", cmd[0])
 	values := cmd[1:]
 
+	fmt.Println(cmd...)
+
 	mu.Lock()
 	for _, v := range values {
 		RedisListStore[key] = append(RedisListStore[key], fmt.Sprintf("%v", v))
