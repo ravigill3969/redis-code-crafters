@@ -44,12 +44,16 @@ func GET(cmd []interface{}) (string, bool) {
 	}
 
 	value, exists := redisKeyValueStore[key]
-	strVal, ok := value.(string)
-	if !ok {
-		return "", false
+	if !exists {
+		return "", false // key does not exist
 	}
 
-	return strVal, exists
+	strVal, ok := value.(string)
+	if !ok {
+		return "", false // value is not a string
+	}
+
+	return strVal, true
 }
 
 func TYPE(cmd []interface{}) bool {
