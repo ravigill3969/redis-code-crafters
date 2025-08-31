@@ -65,33 +65,44 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 				break
 			}
+			key := fmt.Sprintf("%v", cmdParser[1])
+			value := cmdParser[2]
 
-			ok := handlers.SET(cmdParser[1:])
+			mu.Lock()
+			redisKeyValueStore[key] = value
 
-			if ok {
-				conn.Write([]byte("+OK\r\n"))
+			if len(cmdParser) > 3 && strings.ToUpper(fmt.Sprintf("%v", cmdParser[3])) == "PX" {
+				ms, _ := strconv.Atoi(fmt.Sprintf("%v", cmdParser[4]))
+				redisKeyExpiryTime[key] = time.Now().Add(time.Duration(ms) * time.Millisecond)
 			}
+			mu.Unlock()
+			conn.Write([]byte("+OK\r\n"))
 
 		case "GET":
-			if len(cmdParser) != 2 {
-				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
-				break
-			}
-
-			value, ok := handlers.GET([]interface{}{cmdParser[1]})
-
-			if !ok {
-				conn.Write([]byte("$-1\r\n"))
-			} else {
-				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(value), value)
-			}
-
-		case "TYPE":
 			if len(cmdParser) < 2 {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 				break
 			}
+			key := fmt.Sprintf("%v", cmdParser[1])
 
+			mu.Lock()
+			// Check expiration
+			if expiry, ok := redisKeyExpiryTime[key]; ok && expiry.Before(time.Now()) {
+				delete(redisKeyExpiryTime, key)
+				delete(redisKeyValueStore, key)
+			}
+
+			value, ok := redisKeyValueStore[key]
+			mu.Unlock()
+
+			if !ok {
+				conn.Write([]byte("$-1\r\n"))
+			} else {
+				valStr := fmt.Sprintf("%v", value)
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(valStr), valStr)
+			}
+
+		case "TYPE":
 			ok := handlers.TYPE(cmdParser[1:])
 
 			if ok {
@@ -99,6 +110,14 @@ func handleConnection(conn net.Conn) {
 			} else {
 				fmt.Fprintf(conn, "+%s\r\n", "none")
 
+			}
+
+		case "RPUSH":
+			length, err := handlers.RPUSH(cmdParser[1:])
+			if err != nil {
+				conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
+			} else {
+				fmt.Fprintf(conn, ":%d\r\n", length)
 			}
 
 		case "LRANGE":
@@ -140,24 +159,16 @@ func handleConnection(conn net.Conn) {
 				fmt.Fprintf(conn, "$-1\r\n")
 			}
 
-		case "RPUSH":
-			length, err := handlers.RPUSH(cmdParser[1:])
-			if err != nil {
-				conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
-			} else {
-				fmt.Fprintf(conn, ":%d\r\n", length)
-			}
-
 		case "BLPOP":
 			val, ok := handlers.BLPOP(cmdParser[1:])
 
 			if ok {
-				key := fmt.Sprintf("%v", cmdParser[1])
+				key := fmt.Sprintf("%v", cmdParser[0]) // the list name
 				fmt.Fprintf(conn, "*2\r\n")
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(key), key)
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(val), val)
 			} else {
-				fmt.Fprintf(conn, "*-1\r\n")
+				fmt.Fprintf(conn, "*-1\r\n") // nil array if nothing popped in timeout
 			}
 
 		default:
