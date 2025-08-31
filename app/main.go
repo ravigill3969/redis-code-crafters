@@ -191,6 +191,7 @@ func handleConnection(conn net.Conn) {
 			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
+			
 		}
 	}
 }
