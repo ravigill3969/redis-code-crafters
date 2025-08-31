@@ -150,6 +150,15 @@ func handleConnection(conn net.Conn) {
 				fmt.Fprintf(conn, "$-1\r\n")
 			}
 
+		case "BLOP":
+			val, ok := handlers.BLOP(cmdParser[1:])
+
+			if ok {
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(val), val)
+			} else {
+				fmt.Fprintf(conn, "$-1\r\n")
+			}
+
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 		}
