@@ -65,42 +65,41 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 				break
 			}
-			key := fmt.Sprintf("%v", cmdParser[1])
-			value := cmdParser[2]
 
-			mu.Lock()
-			redisKeyValueStore[key] = value
+			ok := handlers.SET(cmdParser[1:])
 
-			// PX expiration optional
-			if len(cmdParser) > 3 && strings.ToUpper(fmt.Sprintf("%v", cmdParser[3])) == "PX" {
-				ms, _ := strconv.Atoi(fmt.Sprintf("%v", cmdParser[4]))
-				redisKeyExpiryTime[key] = time.Now().Add(time.Duration(ms) * time.Millisecond)
+			if ok {
+				conn.Write([]byte("+OK\r\n"))
 			}
-			mu.Unlock()
-			conn.Write([]byte("+OK\r\n"))
 
 		case "GET":
 			if len(cmdParser) < 2 {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 				break
 			}
-			key := fmt.Sprintf("%v", cmdParser[1])
 
-			mu.Lock()
-			// Check expiration
-			if expiry, ok := redisKeyExpiryTime[key]; ok && expiry.Before(time.Now()) {
-				delete(redisKeyExpiryTime, key)
-				delete(redisKeyValueStore, key)
-			}
-
-			value, ok := redisKeyValueStore[key]
-			mu.Unlock()
+			value, ok := handlers.GET(cmdParser[1:])
 
 			if !ok {
 				conn.Write([]byte("$-1\r\n"))
 			} else {
 				valStr := fmt.Sprintf("%v", value)
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(valStr), valStr)
+			}
+
+		case "TYPE":
+			if len(cmdParser) < 2 {
+				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
+				break
+			}
+
+			ok := handlers.TYPE(cmdParser[1:])
+
+			if ok {
+				fmt.Fprintf(conn, "+%s\r\n", "string")
+			} else {
+				fmt.Fprintf(conn, "+%s\r\n", "none")
+
 			}
 
 		case "LRANGE":
