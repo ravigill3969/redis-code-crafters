@@ -21,8 +21,8 @@ var redisKeyTypeStore = make(map[string]string)
 var mu sync.RWMutex
 
 func main() {
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
-	// l, err := net.Listen("tcp", "127.0.0.1:6700")
+	// l, err := net.Listen("tcp", "0.0.0.0:6379")
+	l, err := net.Listen("tcp", "127.0.0.1:6700")
 
 	if err != nil {
 		fmt.Println("Failed to bind port:", err)
@@ -193,6 +193,7 @@ func handleConnection(conn net.Conn) {
 			if err != nil {
 				fmt.Fprintf(conn, "-%s\r\n", err.Error())
 			} else {
+				// send RESP bulk string with the ID
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
 			}
 		default:
@@ -201,7 +202,9 @@ func handleConnection(conn net.Conn) {
 		}
 	}
 }
+
 func tokenizeRESP(raw string) []string {
+
 	clean := strings.ReplaceAll(raw, "\r\n", "\n")
 	lines := strings.Split(clean, "\n")
 	tokens := []string{}
@@ -210,29 +213,23 @@ func tokenizeRESP(raw string) []string {
 			tokens = append(tokens, line)
 		}
 	}
+
 	return tokens
 }
 
-// ParseRESP parses raw RESP2 into []interface{} (all strings)
 func ParseRESP(raw string) []interface{} {
 	lines := tokenizeRESP(raw)
-	fmt.Println(lines)
-
 	cmd := []interface{}{}
 
 	for _, t := range lines {
 		if t == "" {
 			continue
 		}
-		// skip array or bulk length lines
 		if t[0] == '*' || t[0] == '$' {
-			continue
+			continue // skip array and bulk length lines
 		}
-		// keep everything as string
-		cmd = append(cmd, t)
+		cmd = append(cmd, t) // keep everything as string
 	}
-
-	fmt.Println(cmd)
 
 	return cmd
 }
