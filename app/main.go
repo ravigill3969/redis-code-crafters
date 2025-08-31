@@ -154,9 +154,12 @@ func handleConnection(conn net.Conn) {
 			val, ok := handlers.BLPOP(cmdParser[1:])
 
 			if ok {
+				key := fmt.Sprintf("%v", cmdParser[0]) // the list name
+				fmt.Fprintf(conn, "*2\r\n")
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(key), key)
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(val), val)
 			} else {
-				fmt.Fprintf(conn, "$-1\r\n")
+				fmt.Fprintf(conn, "*-1\r\n") // nil array if nothing popped in timeout
 			}
 
 		default:
