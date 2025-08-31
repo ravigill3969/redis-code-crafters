@@ -9,10 +9,9 @@ var redisStreams = map[string][]struct {
 
 func XADD(cmd []interface{}) string {
 
-	// cmd[0] = "XADD"
-	// cmd[1] = stream key
-	// cmd[2] = entry ID
-	// cmd[3:] = field-value pairs
+	// cmd[0] = stream key
+	// cmd[1] = entry ID
+	// cmd[2:] = field-value pairs
 
 	fmt.Println(cmd...)
 	rstream := fmt.Sprintf("%v", cmd[0])
