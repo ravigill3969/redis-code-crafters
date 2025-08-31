@@ -18,8 +18,8 @@ var redisListStore = make(map[string][]string)
 var mu sync.RWMutex
 
 func main() {
-	// l, err := net.Listen("tcp", "0.0.0.0:6379")
-	l, err := net.Listen("tcp", "127.0.0.1:6700")
+	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	// l, err := net.Listen("tcp", "127.0.0.1:6700")
 	if err != nil {
 		fmt.Println("Failed to bind port:", err)
 		return
