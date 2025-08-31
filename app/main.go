@@ -103,13 +103,28 @@ func handleConnection(conn net.Conn) {
 			}
 
 		case "TYPE":
-			ok := handlers.TYPE(cmdParser[1:])
+			key, ok := cmdParser[1].(string)
+			if !ok {
+				fmt.Fprintf(conn, "+none\r\n")
+			}
 
-			if ok {
-				fmt.Fprintf(conn, "+%s\r\n", "string")
+			mu.Lock()
+			defer mu.Unlock()
+
+			// Check for expiry
+			expiry, exists := redisKeyExpiryTime[key]
+			if exists && expiry.Before(time.Now()) {
+				delete(redisKeyExpiryTime, key)
+				delete(redisKeyValueStore, key)
+				fmt.Fprintf(conn, "+none\r\n")
+			}
+
+			_, exists = redisKeyValueStore[key]
+
+			if exists {
+				fmt.Fprintf(conn, "+string\r\n")
 			} else {
-				fmt.Fprintf(conn, "+%s\r\n", "none")
-
+				fmt.Fprintf(conn, "+none\r\n")
 			}
 
 		case "RPUSH":
