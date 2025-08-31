@@ -23,6 +23,7 @@ var mu sync.RWMutex
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	// l, err := net.Listen("tcp", "127.0.0.1:6700")
+
 	if err != nil {
 		fmt.Println("Failed to bind port:", err)
 		return
@@ -191,7 +192,7 @@ func handleConnection(conn net.Conn) {
 			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
-			
+
 		}
 	}
 }
@@ -226,8 +227,6 @@ func ParseRESP(raw string) []interface{} {
 			cmd = append(cmd, t)
 		}
 	}
-
-	fmt.Println("parserdREsp", cmd)
 
 	return cmd
 }
