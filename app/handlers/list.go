@@ -150,6 +150,7 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 	}
 
 	res := list[:loop]
+	fmt.Println(res)
 	RedisListStore[key] = list[loop:]
 	return res, true
 }
