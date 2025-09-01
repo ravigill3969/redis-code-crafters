@@ -32,9 +32,6 @@ func XADD(cmd []interface{}) (string, error) {
 		return "", fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
 	}
 
-	fmt.Println(id)
-	fmt.Println(check)
-
 	if check {
 		if !isValidID(rstream, id) {
 			return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
@@ -140,6 +137,7 @@ func handleTimeAndSeq(key string) string {
 }
 
 func XRANGE(cmd []interface{}) {
+	fmt.Println(cmd , "inside xrange")
 	streamKey := cmd[0].(string)
 	startSeq := cmd[1]
 	endSeq := cmd[2]
