@@ -16,28 +16,28 @@ var streamTimeAndSeq = map[string]string{}
 var redisStreamKeyWithTimeAndSequence = map[string]string{}
 
 func XADD(cmd []interface{}) (string, error) {
-
 	rstream := fmt.Sprintf("%v", cmd[0])
 	id := fmt.Sprintf("%v", cmd[1])
 
 	fields := map[string]string{}
-
 	check := true
 
-	if strings.Split(id, "-")[1] == "*" {
+	// Handle auto-generated sequence
+	if strings.HasSuffix(id, "-*") {
 		id = handleSeq(id, rstream)
 		check = false
 	} else if id == "0-0" {
 		return "", fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
 	}
 
-	ok := isValidID(rstream, id)
+	// Validate ID if not auto-generated
 	if check {
-		if !ok {
+		if !isValidID(rstream, id) {
 			return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
 		}
 	}
 
+	// Build entry fields
 	for i := 2; i < len(cmd); i += 2 {
 		key := fmt.Sprintf("%v", cmd[i])
 		if i+1 < len(cmd) {
@@ -45,6 +45,7 @@ func XADD(cmd []interface{}) (string, error) {
 		}
 	}
 
+	// Save entry
 	entry := struct {
 		ID     string
 		Fields map[string]string
@@ -52,29 +53,25 @@ func XADD(cmd []interface{}) (string, error) {
 		ID:     id,
 		Fields: fields,
 	}
-
 	redisStreams[rstream] = append(redisStreams[rstream], entry)
 
-	return id, nil
+	// Update last ID only after success
+	redisStreamKeyWithTimeAndSequence[rstream] = id
 
+	return id, nil
 }
 
-func isValidID(streamKey string, newTimeAndSeq string) bool {
-	fmt.Println("hit", streamKey, newTimeAndSeq)
-
+func isValidID(streamKey, newTimeAndSeq string) bool {
 	lastTimeAndSeq := redisStreamKeyWithTimeAndSequence[streamKey]
-
 	if len(lastTimeAndSeq) == 0 {
 		lastTimeAndSeq = "0-0"
 	}
 
-	redisStreamKeyWithTimeAndSequence[streamKey] = string(newTimeAndSeq)
 	lastParts := strings.Split(lastTimeAndSeq, "-")
 	newParts := strings.Split(newTimeAndSeq, "-")
 
 	lastMs, _ := strconv.ParseInt(lastParts[0], 10, 64)
 	lastSeq, _ := strconv.ParseInt(lastParts[1], 10, 64)
-
 	newMs, _ := strconv.ParseInt(newParts[0], 10, 64)
 	newSeq, _ := strconv.ParseInt(newParts[1], 10, 64)
 
@@ -85,19 +82,29 @@ func isValidID(streamKey string, newTimeAndSeq string) bool {
 		return false
 	}
 
+	// Reject 0-0 or lower
+	if newMs == 0 && newSeq == 0 {
+		return false
+	}
+
 	return true
 }
 
-func handleSeq(seq string, key string) string {
+func handleSeq(seq, key string) string {
 	seqArray := strings.Split(seq, "-")
+	ms := seqArray[0]
 
 	lastTimeAndSeq, ok := redisStreamKeyWithTimeAndSequence[key]
-
 	if !ok {
-		redisStreamKeyWithTimeAndSequence[key] = fmt.Sprintf("%s-%s", seqArray[0], "1")
-		return fmt.Sprintf("%s-%s", seqArray[0], "1")
+		return fmt.Sprintf("%s-%d", ms, 1)
 	}
 
-	return fmt.Sprintf("%s-%s", seqArray[0], strings.Split(lastTimeAndSeq, "-")[1])
+	lastParts := strings.Split(lastTimeAndSeq, "-")
+	// lastMs, _ := strconv.ParseInt(lastParts[0], 10, 64)
+	lastSeq, _ := strconv.ParseInt(lastParts[1], 10, 64)
 
+	if ms == lastParts[0] {
+		return fmt.Sprintf("%s-%d", ms, lastSeq+1)
+	}
+	return fmt.Sprintf("%s-%d", ms, 1)
 }
