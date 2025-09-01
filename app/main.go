@@ -198,7 +198,7 @@ func handleConnection(conn net.Conn) {
 			}
 		
 		case "XRANGE":
-
+			handlers.XRANGE(cmdParser)
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 
