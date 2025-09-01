@@ -118,7 +118,7 @@ func handleTimeAndSeq(key string) string {
 	lastTimeAndSeq, ok := streamTimeAndSeq[key]
 
 	if !ok {
-		streamTimeAndSeq[key] = fmt.Sprintf("%d-%s", now, 0)
+		streamTimeAndSeq[key] = fmt.Sprintf("%d-0", now)
 		return streamTimeAndSeq[key]
 	}
 
