@@ -145,6 +145,8 @@ func XRANGE(conn net.Conn, cmd []interface{}) {
 	startSeq := fmt.Sprintf("%s", cmd[1])
 	endSeq := fmt.Sprintf("%s", cmd[2])
 
+	
+
 	entries, ok := redisStreams[streamKey]
 
 	if !ok || len(entries) == 0 {
