@@ -95,7 +95,9 @@ func handleSeq(seq, key string) string {
 
 	lastTimeAndSeq, ok := redisStreamKeyWithTimeAndSequence[key]
 	if !ok {
-		// first entry in this stream
+		if ms == "0" {
+			return "0-1"
+		}
 		return fmt.Sprintf("%s-%d", ms, 0)
 	}
 
@@ -103,10 +105,11 @@ func handleSeq(seq, key string) string {
 	lastSeq, _ := strconv.ParseInt(lastParts[1], 10, 64)
 
 	if ms == lastParts[0] {
-		// same millisecond → increment sequence
-		return fmt.Sprintf("%s-%d", ms, lastSeq+1)
+		if lastParts[0] == "1" {
+
+			return fmt.Sprintf("%s-%d", ms, lastSeq+1)
+		}
 	}
 
-	// new millisecond → start at 0
 	return fmt.Sprintf("%s-%d", ms, 0)
 }
