@@ -115,25 +115,8 @@ func handleSeq(seq, key string) string {
 }
 
 func handleTimeAndSeq(key string) string {
-	now := time.Now().UnixMilli()
-
-	lastTimeAndSeq, ok := streamTimeAndSeq[key]
-
-	if !ok {
-		streamTimeAndSeq[key] = fmt.Sprintf("%d-0", now)
-		return streamTimeAndSeq[key]
-	}
-
-	lastParts := strings.Split(lastTimeAndSeq, "-")
-	lastMs, _ := strconv.ParseInt(lastParts[0], 10, 64)
-	lastSeq, _ := strconv.ParseInt(lastParts[1], 10, 64)
-
-	if lastMs == now {
-		newID := fmt.Sprintf("%d-%d", now, lastSeq+1)
-		streamTimeAndSeq[key] = newID
-		return newID
-	}
-
-	streamTimeAndSeq[key] = fmt.Sprintf("%d-0", now)
-	return streamTimeAndSeq[key]
+	 ms := time.Now().UnixMilli()
+        newID := fmt.Sprintf("%d-0", ms)
+        redisStreamKeyWithTimeAndSequence[key] = newID
+        return newID
 }
