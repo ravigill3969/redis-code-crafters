@@ -139,6 +139,8 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 		}
 	}
 
+	fmt.Println(loop)
+
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -150,8 +152,6 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 	if loop > len(list) {
 		loop = len(list)
 	}
-
-	fmt.Println()
 
 	res := list[:loop]
 	fmt.Println(res)
