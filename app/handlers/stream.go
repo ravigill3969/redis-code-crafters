@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var redisStreams = map[string][]struct {
@@ -22,22 +23,21 @@ func XADD(cmd []interface{}) (string, error) {
 	fields := map[string]string{}
 	check := true
 
-	// Handle auto-generated sequence
-	if strings.HasSuffix(id, "-*") {
+	if id == "*" {
+		id = handleTimeAndSeq(rstream)
+	} else if strings.HasSuffix(id, "-*") {
 		id = handleSeq(id, rstream)
 		check = false
 	} else if id == "0-0" {
 		return "", fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
 	}
 
-	// Validate ID if not auto-generated
 	if check {
 		if !isValidID(rstream, id) {
 			return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
 		}
 	}
 
-	// Build entry fields
 	for i := 2; i < len(cmd); i += 2 {
 		key := fmt.Sprintf("%v", cmd[i])
 		if i+1 < len(cmd) {
@@ -45,7 +45,6 @@ func XADD(cmd []interface{}) (string, error) {
 		}
 	}
 
-	// Save entry
 	entry := struct {
 		ID     string
 		Fields map[string]string
@@ -55,7 +54,6 @@ func XADD(cmd []interface{}) (string, error) {
 	}
 	redisStreams[rstream] = append(redisStreams[rstream], entry)
 
-	// Update last ID only after success
 	redisStreamKeyWithTimeAndSequence[rstream] = id
 
 	return id, nil
@@ -112,4 +110,28 @@ func handleSeq(seq, key string) string {
 	}
 
 	return fmt.Sprintf("%s-%d", ms, 0)
+}
+
+func handleTimeAndSeq(key string) string {
+	now := time.Now().UnixMilli()
+
+	lastTimeAndSeq, ok := streamTimeAndSeq[key]
+
+	if !ok {
+		streamTimeAndSeq[key] = fmt.Sprintf("%d-%s", now, 0)
+		return streamTimeAndSeq[key]
+	}
+
+	lastParts := strings.Split(lastTimeAndSeq, "-")
+	lastMs, _ := strconv.ParseInt(lastParts[0], 10, 64)
+	lastSeq, _ := strconv.ParseInt(lastParts[1], 10, 64)
+
+	if lastMs == now {
+		newID := fmt.Sprintf("%d-%d", now, lastSeq+1)
+		streamTimeAndSeq[key] = newID
+		return newID
+	}
+
+	streamTimeAndSeq[key] = fmt.Sprintf("%d-0", now)
+	return streamTimeAndSeq[key]
 }
