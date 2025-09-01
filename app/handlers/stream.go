@@ -11,25 +11,24 @@ var redisStreams = map[string][]struct {
 	Fields map[string]string
 }{}
 
+var streamTimeAndSeq = map[string]string{}
+
 var redisStreamKeyWithTimeAndSequence = map[string]string{}
 
 func XADD(cmd []interface{}) (string, error) {
-
-	// cmd[0] = stream key
-	// cmd[1] = entry ID
-	// cmd[2:] = field-value pairs
 
 	rstream := fmt.Sprintf("%v", cmd[0])
 	id := fmt.Sprintf("%v", cmd[1])
 
 	fields := map[string]string{}
 
-	ok := isValidID(rstream, id)
-
-	if id == "0-0" {
+	if strings.Split(id, "-")[1] == "*" {
+		id = handleSeq(id, rstream)
+	} else if id == "0-0" {
 		return "", fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
 	}
 
+	ok := isValidID(rstream, id)
 	if !ok {
 		return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
 	}
@@ -79,7 +78,20 @@ func isValidID(streamKey string, newTimeAndSeq string) bool {
 	if newMs == lastMs && newSeq <= lastSeq {
 		return false
 	}
-	fmt.Println("retruning")
 
 	return true
+}
+
+func handleSeq(seq string, key string) string {
+	seqArray := strings.Split(seq, "-")
+
+	lastTimeAndSeq, ok := redisStreamKeyWithTimeAndSequence[key]
+
+	if !ok {
+		redisStreamKeyWithTimeAndSequence[key] = fmt.Sprintf("%s-%s", seqArray[0], "1")
+		return fmt.Sprintf("%s-%s", seqArray[0], "1")
+	}
+
+	return fmt.Sprintf("%s-%s", seqArray[0], strings.Split(lastTimeAndSeq, "-")[1])
+
 }
