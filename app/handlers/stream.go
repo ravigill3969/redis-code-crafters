@@ -147,7 +147,7 @@ func XRANGE(conn net.Conn, cmd []interface{}) {
 
 	entries, ok := redisStreams[streamKey]
 
-	if !ok || len(entries) < 1 {
+	if !ok || len(entries) == 0 {
 		conn.Write([]byte("No data availabe"))
 		return
 	}
