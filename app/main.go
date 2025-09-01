@@ -196,9 +196,10 @@ func handleConnection(conn net.Conn) {
 				// send RESP bulk string with the ID
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
 			}
-		
+
 		case "XRANGE":
-			handlers.XRANGE(cmdParser)
+			handlers.XRANGE(conn, cmdParser)
+
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 
@@ -223,8 +224,6 @@ func ParseRESP(raw string) []interface{} {
 	lines := tokenizeRESP(raw)
 	cmd := []interface{}{}
 
-	fmt.Println(lines)
-
 	for _, t := range lines {
 		if t == "" {
 			continue
@@ -246,7 +245,6 @@ func ParseRESP(raw string) []interface{} {
 			}
 		}
 	}
-	fmt.Println(cmd)
 
 	return cmd
 }

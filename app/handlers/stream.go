@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -9,10 +10,13 @@ import (
 
 var streamTimeAndSeq = map[string]string{}
 var redisStreamKeyWithTimeAndSequence = map[string]string{}
-var redisStreams = map[string][]struct {
+
+type StreamEntry struct {
 	ID     string
 	Fields map[string]string
-}{}
+}
+
+var redisStreams = map[string][]StreamEntry{}
 
 func XADD(cmd []interface{}) (string, error) {
 	rstream := fmt.Sprintf("%v", cmd[0])
@@ -135,24 +139,73 @@ func handleTimeAndSeq(key string) string {
 	// New ms → reset seq to 0
 	return fmt.Sprintf("%d-0", ms)
 }
+func XRANGE(conn net.Conn, cmd []interface{}) {
+	if len(cmd) < 3 {
+		conn.Write([]byte("-ERR wrong number of arguments for XRANGE\r\n"))
+		return
+	}
 
-func XRANGE(cmd []interface{}) {
-	fmt.Println(cmd , "inside xrange")
 	streamKey := cmd[0].(string)
-	startSeq := cmd[1]
-	endSeq := cmd[2]
+	startID := cmd[1].(string)
+	endID := cmd[2].(string)
 
-	type Fields map[string]string
+	entries, ok := redisStreams[streamKey]
+	if !ok || len(entries) == 0 {
+		conn.Write([]byte("*0\r\n")) // empty RESP array
+		return
+	}
 
-	res := []Fields{}
+	res := []StreamEntry{}
 
-	values := redisStreams[streamKey]
-
-	for _, v := range values {
-		if strings.Split(v.ID, "-")[0] >= strconv.Itoa((startSeq.(int))) && strings.Split(v.ID, "-")[0] <= strconv.Itoa((endSeq.(int))) {
-			res = append(res, v.Fields)
+	for _, e := range entries {
+		if idInRange(e.ID, startID, endID) {
+			res = append(res, e)
 		}
 	}
 
-	fmt.Println(res)
+	// Write as RESP Array
+	conn.Write([]byte(fmt.Sprintf("*%d\r\n", len(res))))
+	for _, e := range res {
+		// ID
+		conn.Write([]byte(fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(e.ID), e.ID)))
+
+		// Fields as array
+		fieldCount := len(e.Fields) * 2
+		conn.Write([]byte(fmt.Sprintf("*%d\r\n", fieldCount)))
+		for k, v := range e.Fields {
+			conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(k), k)))
+			conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v)))
+		}
+	}
+}
+
+// Helper: checks if entryID is within startID and endID (inclusive)
+func idInRange(entryID, startID, endID string) bool {
+	eSplit := strings.Split(entryID, "-")
+	sSplit := strings.Split(startID, "-")
+	endSplit := strings.Split(endID, "-")
+
+	eMs, _ := strconv.ParseInt(eSplit[0], 10, 64)
+	eSeq, _ := strconv.ParseInt(eSplit[1], 10, 64)
+	sMs, _ := strconv.ParseInt(sSplit[0], 10, 64)
+	sSeq := int64(0)
+	if len(sSplit) > 1 {
+		sSeq, _ = strconv.ParseInt(sSplit[1], 10, 64)
+	}
+	endMs, _ := strconv.ParseInt(endSplit[0], 10, 64)
+	endSeq := int64(999999)
+	if len(endSplit) > 1 {
+		endSeq, _ = strconv.ParseInt(endSplit[1], 10, 64)
+	}
+
+	if eMs < sMs || eMs > endMs {
+		return false
+	}
+	if eMs == sMs && eSeq < sSeq {
+		return false
+	}
+	if eMs == endMs && eSeq > endSeq {
+		return false
+	}
+	return true
 }
