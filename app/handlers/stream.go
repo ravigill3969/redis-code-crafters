@@ -23,8 +23,8 @@ func XADD(cmd []interface{}) (string, error) {
 	check := true
 
 	if id == "*" {
-		id = handleTimeAndSeq(rstream)
 		check = false
+		id = handleTimeAndSeq(rstream)
 
 	} else if strings.HasSuffix(id, "-*") {
 		id = handleSeq(id, rstream)

@@ -216,7 +216,6 @@ func tokenizeRESP(raw string) []string {
 
 	return tokens
 }
-
 func ParseRESP(raw string) []interface{} {
 	lines := tokenizeRESP(raw)
 	cmd := []interface{}{}
@@ -225,10 +224,22 @@ func ParseRESP(raw string) []interface{} {
 		if t == "" {
 			continue
 		}
-		if t[0] == '*' || t[0] == '$' {
-			continue // skip array and bulk length lines
+
+		switch t[0] {
+		case '*':
+			// Keep array markers as string
+			cmd = append(cmd, t)
+		case '$':
+			// Skip bulk string length lines
+			continue
+		default:
+			// Try to parse integer
+			if i, err := strconv.Atoi(t); err == nil {
+				cmd = append(cmd, i)
+			} else {
+				cmd = append(cmd, t)
+			}
 		}
-		cmd = append(cmd, t) // keep everything as string
 	}
 
 	return cmd
