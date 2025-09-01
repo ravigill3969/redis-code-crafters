@@ -89,22 +89,24 @@ func isValidID(streamKey, newTimeAndSeq string) bool {
 
 	return true
 }
-
 func handleSeq(seq, key string) string {
 	seqArray := strings.Split(seq, "-")
 	ms := seqArray[0]
 
 	lastTimeAndSeq, ok := redisStreamKeyWithTimeAndSequence[key]
 	if !ok {
-		return fmt.Sprintf("%s-%d", ms, 1)
+		// first entry in this stream
+		return fmt.Sprintf("%s-%d", ms, 0)
 	}
 
 	lastParts := strings.Split(lastTimeAndSeq, "-")
-	// lastMs, _ := strconv.ParseInt(lastParts[0], 10, 64)
 	lastSeq, _ := strconv.ParseInt(lastParts[1], 10, 64)
 
 	if ms == lastParts[0] {
+		// same millisecond → increment sequence
 		return fmt.Sprintf("%s-%d", ms, lastSeq+1)
 	}
-	return fmt.Sprintf("%s-%d", ms, 1)
+
+	// new millisecond → start at 0
+	return fmt.Sprintf("%s-%d", ms, 0)
 }
