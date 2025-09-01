@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -142,90 +141,76 @@ func handleTimeAndSeq(key string) string {
 }
 
 func XRANGE(conn net.Conn, cmd []interface{}) {
-	if len(cmd) < 3 {
-		conn.Write([]byte("-ERR wrong number of arguments for XRANGE\r\n"))
-		return
-	}
-
-	streamKey := cmd[0].(string)
-	startID := cmd[1].(string)
-	endID := cmd[2].(string)
+	streamKey := fmt.Sprintf("%s", cmd[0])
+	startSeq := fmt.Sprintf("%s", cmd[1])
+	endSeq := fmt.Sprintf("%s", cmd[2])
 
 	entries, ok := redisStreams[streamKey]
-	if !ok || len(entries) == 0 {
-		conn.Write([]byte("*0\r\n")) // empty RESP array
+
+	if !ok || len(entries) < 1 {
+		conn.Write([]byte("No data availabe"))
 		return
 	}
 
-	res := []StreamEntry{}
+	var res []StreamEntry
+
 	for _, e := range entries {
-		if idInRange(e.ID, startID, endID) {
+		if XrangeIsValidId(startSeq, endSeq, e.ID) {
 			res = append(res, e)
 		}
 	}
 
-	// Build RESP output in memory
-	var out strings.Builder
-	out.WriteString(fmt.Sprintf("*%d\r\n", len(res)))
+	var s strings.Builder
 
-	for _, e := range res {
-		// Outer array with 2 elements: ID + field array
-		out.WriteString(fmt.Sprintf("*2\r\n"))
+	s.Write([]byte(fmt.Sprintf("*%d\r\n", len(res))))
+	for _, c := range res {
+		s.Write([]byte(fmt.Sprintf("*%d\r\n", 2)))
 
-		// ID
-		out.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(e.ID), e.ID))
+		s.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(c.ID), c.ID)))
+		s.Write([]byte(fmt.Sprintf("*%d\r\n", len(c.Fields)*2)))
 
-		// Fields
-		fieldCount := len(e.Fields) * 2
-		out.WriteString(fmt.Sprintf("*%d\r\n", fieldCount))
-		for _, key := range sortedKeys(e.Fields) { // keep ordering deterministic
-			val := e.Fields[key]
-			out.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(key), key))
-			out.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
+		for _, key := range c.Fields {
+			val := c.Fields[key]
+			s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(key), key))
+			s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
 		}
+
 	}
 
-	// Send in one write
-	conn.Write([]byte(out.String()))
+	conn.Write([]byte(s.String()))
+
 }
 
-// Optional: keep keys sorted so tests don’t fail due to map iteration order
-func sortedKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
+func XrangeIsValidId(startSeq, endSeq, loopId string) bool {
 
-// Helper: checks if entryID is within startID and endID (inclusive)
-func idInRange(entryID, startID, endID string) bool {
-	eSplit := strings.Split(entryID, "-")
-	sSplit := strings.Split(startID, "-")
-	endSplit := strings.Split(endID, "-")
+	startSplit := strings.Split(startSeq, "-")
+	endSplit := strings.Split(endSeq, "-")
+	loopSplit := strings.Split(loopId, "-")
 
-	eMs, _ := strconv.ParseInt(eSplit[0], 10, 64)
-	eSeq, _ := strconv.ParseInt(eSplit[1], 10, 64)
-	sMs, _ := strconv.ParseInt(sSplit[0], 10, 64)
-	sSeq := int64(0)
-	if len(sSplit) > 1 {
-		sSeq, _ = strconv.ParseInt(sSplit[1], 10, 64)
+	startMS, _ := strconv.ParseInt(startSplit[0], 10, 64)
+	endMS, _ := strconv.ParseInt(endSplit[0], 10, 64)
+	loopMS, _ := strconv.ParseInt(loopSplit[0], 10, 64)
+
+	startSequ := int64(0)
+	if len(startSplit) > 1 {
+		startSequ, _ = strconv.ParseInt(startSplit[1], 10, 64)
 	}
-	endMs, _ := strconv.ParseInt(endSplit[0], 10, 64)
-	endSeq := int64(999999)
+	endSequ := int64(0)
 	if len(endSplit) > 1 {
-		endSeq, _ = strconv.ParseInt(endSplit[1], 10, 64)
+		endSequ, _ = strconv.ParseInt(endSplit[1], 10, 64)
+	}
+	loopSequ := int64(0)
+	if len(loopSplit) > 1 {
+		loopSequ, _ = strconv.ParseInt(loopSplit[1], 10, 64)
 	}
 
-	if eMs < sMs || eMs > endMs {
+	if loopMS < startMS || (loopMS == startMS && loopSequ < startSequ) {
 		return false
 	}
-	if eMs == sMs && eSeq < sSeq {
+
+	if loopMS > endMS || (loopMS == endMS && loopSequ > endSequ) {
 		return false
 	}
-	if eMs == endMs && eSeq > endSeq {
-		return false
-	}
+
 	return true
 }
