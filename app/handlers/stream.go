@@ -7,14 +7,13 @@ import (
 	"time"
 )
 
+var streamTimeAndSeq = map[string]string{}
+var redisStreamKeyWithTimeAndSequence = map[string]string{}
 var redisStreams = map[string][]struct {
 	ID     string
 	Fields map[string]string
 }{}
 
-var streamTimeAndSeq = map[string]string{}
-
-var redisStreamKeyWithTimeAndSequence = map[string]string{}
 
 func XADD(cmd []interface{}) (string, error) {
 	rstream := fmt.Sprintf("%v", cmd[0])
@@ -33,6 +32,9 @@ func XADD(cmd []interface{}) (string, error) {
 	} else if id == "0-0" {
 		return "", fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
 	}
+
+	fmt.Println(id)
+	fmt.Println(check)
 
 	if check {
 		if !isValidID(rstream, id) {
