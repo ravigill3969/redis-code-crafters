@@ -130,13 +130,10 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 
 	key := fmt.Sprintf("%v", cmd[0])
 
-	loop := 1
-	if len(cmd) > 1 {
-		if strVal, ok := cmd[1].(string); ok {
-			if val, err := strconv.Atoi(strVal); err == nil && val > 0 {
-				loop = val
-			}
-		}
+	loop, ok  := cmd[1].(int)
+
+	if !ok{
+		loop = 1
 	}
 
 	fmt.Println(loop)
