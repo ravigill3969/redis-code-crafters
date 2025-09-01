@@ -220,11 +220,13 @@ func ParseRESP(raw string) []interface{} {
 	lines := tokenizeRESP(raw)
 	cmd := []interface{}{}
 
+	fmt.Println(lines)
+	
 	for _, t := range lines {
 		if t == "" {
 			continue
 		}
-
+		
 		switch t[0] {
 		case '*':
 			// Keep array markers as string
@@ -236,11 +238,12 @@ func ParseRESP(raw string) []interface{} {
 			// Try to parse integer
 			if i, err := strconv.Atoi(t); err == nil {
 				cmd = append(cmd, i)
-			} else {
-				cmd = append(cmd, t)
+				} else {
+					cmd = append(cmd, t)
 			}
 		}
 	}
+	fmt.Println(cmd)
 
 	return cmd
 }
