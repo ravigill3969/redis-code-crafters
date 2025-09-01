@@ -141,12 +141,20 @@ func handleTimeAndSeq(key string) string {
 
 func XRANGE(cmd []interface{}) {
 	streamKey := cmd[0].(string)
-	// startSeq := cmd[1]
-	// endSeq := cmd[2]
+	startSeq := cmd[1]
+	endSeq := cmd[2]
 
-	values := redisStreamKeyWithTimeAndSequence[streamKey]
+	type Fields map[string]string
+
+	res := []Fields{}
+
+	values := redisStreams[streamKey]
 
 	for _, v := range values {
-		fmt.Println(v)
+		if strings.Split(v.ID, "-")[0] >= strconv.Itoa((startSeq.(int))) && strings.Split(v.ID, "-")[0] <= strconv.Itoa((endSeq.(int))) {
+			res = append(res, v.Fields)
+		}
 	}
+
+	fmt.Println(res)
 }
