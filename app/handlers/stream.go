@@ -22,15 +22,20 @@ func XADD(cmd []interface{}) (string, error) {
 
 	fields := map[string]string{}
 
+	check := true
+
 	if strings.Split(id, "-")[1] == "*" {
 		id = handleSeq(id, rstream)
+		check = false
 	} else if id == "0-0" {
 		return "", fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
 	}
 
 	ok := isValidID(rstream, id)
-	if !ok {
-		return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+	if check {
+		if !ok {
+			return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+		}
 	}
 
 	for i := 2; i < len(cmd); i += 2 {
@@ -56,6 +61,7 @@ func XADD(cmd []interface{}) (string, error) {
 
 func isValidID(streamKey string, newTimeAndSeq string) bool {
 	fmt.Println("hit", streamKey, newTimeAndSeq)
+
 	lastTimeAndSeq := redisStreamKeyWithTimeAndSequence[streamKey]
 
 	if len(lastTimeAndSeq) == 0 {
