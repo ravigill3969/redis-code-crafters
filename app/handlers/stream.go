@@ -145,9 +145,10 @@ func XRANGE(conn net.Conn, cmd []interface{}) {
 	startSeq := fmt.Sprintf("%s", cmd[1])
 	endSeq := fmt.Sprintf("%s", cmd[2])
 
-	
+	fmt.Println(streamKey)
 
 	entries, ok := redisStreams[streamKey]
+	fmt.Println(entries)
 
 	if !ok || len(entries) == 0 {
 		conn.Write([]byte("No data availabe"))
@@ -172,6 +173,7 @@ func XRANGE(conn net.Conn, cmd []interface{}) {
 		s.Write([]byte(fmt.Sprintf("*%d\r\n", len(c.Fields)*2)))
 
 		for _, key := range c.Fields {
+			fmt.Println(key)
 			val := c.Fields[key]
 			s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(key), key))
 			s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
