@@ -221,25 +221,25 @@ func ParseRESP(raw string) []interface{} {
 	cmd := []interface{}{}
 
 	fmt.Println(lines)
-	
+
 	for _, t := range lines {
 		if t == "" {
 			continue
 		}
-		
+
 		switch t[0] {
 		case '*':
-			// Keep array markers as string
-			cmd = append(cmd, t)
+			if len(t) == 1 {
+				cmd = append(cmd, t)
+			}
 		case '$':
-			// Skip bulk string length lines
+
 			continue
 		default:
-			// Try to parse integer
 			if i, err := strconv.Atoi(t); err == nil {
 				cmd = append(cmd, i)
-				} else {
-					cmd = append(cmd, t)
+			} else {
+				cmd = append(cmd, t)
 			}
 		}
 	}
