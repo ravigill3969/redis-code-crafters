@@ -14,7 +14,6 @@ var redisStreams = map[string][]struct {
 	Fields map[string]string
 }{}
 
-
 func XADD(cmd []interface{}) (string, error) {
 	rstream := fmt.Sprintf("%v", cmd[0])
 	id := fmt.Sprintf("%v", cmd[1])
@@ -62,6 +61,7 @@ func XADD(cmd []interface{}) (string, error) {
 
 	return id, nil
 }
+
 func isValidID(streamKey, newID string) bool {
 	lastID := redisStreamKeyWithTimeAndSequence[streamKey]
 	if lastID == "" {
@@ -137,4 +137,16 @@ func handleTimeAndSeq(key string) string {
 
 	// New ms → reset seq to 0
 	return fmt.Sprintf("%d-0", ms)
+}
+
+func XRANGE(cmd []interface{}) {
+	streamKey := cmd[0].(string)
+	// startSeq := cmd[1]
+	// endSeq := cmd[2]
+
+	values := redisStreamKeyWithTimeAndSequence[streamKey]
+
+	for _, v := range values {
+		fmt.Println(v)
+	}
 }

@@ -196,6 +196,9 @@ func handleConnection(conn net.Conn) {
 				// send RESP bulk string with the ID
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
 			}
+		
+		case "XRANGE":
+
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 
