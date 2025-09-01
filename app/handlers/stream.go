@@ -60,15 +60,19 @@ func XADD(cmd []interface{}) (string, error) {
 
 	return id, nil
 }
-
-func isValidID(streamKey, newTimeAndSeq string) bool {
-	lastTimeAndSeq := redisStreamKeyWithTimeAndSequence[streamKey]
-	if len(lastTimeAndSeq) == 0 {
-		lastTimeAndSeq = "0-0"
+func isValidID(streamKey, newID string) bool {
+	lastID := redisStreamKeyWithTimeAndSequence[streamKey]
+	if lastID == "" {
+		lastID = "0-0"
 	}
 
-	lastParts := strings.Split(lastTimeAndSeq, "-")
-	newParts := strings.Split(newTimeAndSeq, "-")
+	lastParts := strings.Split(lastID, "-")
+	newParts := strings.Split(newID, "-")
+
+	// Defensive check
+	if len(lastParts) < 2 || len(newParts) < 2 {
+		return false
+	}
 
 	lastMs, _ := strconv.ParseInt(lastParts[0], 10, 64)
 	lastSeq, _ := strconv.ParseInt(lastParts[1], 10, 64)
@@ -81,42 +85,54 @@ func isValidID(streamKey, newTimeAndSeq string) bool {
 	if newMs == lastMs && newSeq <= lastSeq {
 		return false
 	}
-
-	// Reject 0-0 or lower
 	if newMs == 0 && newSeq == 0 {
 		return false
 	}
 
 	return true
 }
-func handleSeq(seq, key string) string {
-	seqArray := strings.Split(seq, "-")
-	ms := seqArray[0]
 
-	lastTimeAndSeq, ok := redisStreamKeyWithTimeAndSequence[key]
-	if !ok {
+func handleSeq(id, key string) string {
+	ms := strings.Split(id, "-")[0]
+
+	lastID := redisStreamKeyWithTimeAndSequence[key]
+	if lastID == "" {
 		if ms == "0" {
 			return "0-1"
 		}
-		return fmt.Sprintf("%s-%d", ms, 0)
+		return fmt.Sprintf("%s-0", ms)
 	}
 
-	lastParts := strings.Split(lastTimeAndSeq, "-")
+	lastParts := strings.Split(lastID, "-")
+	lastMs := lastParts[0]
 	lastSeq, _ := strconv.ParseInt(lastParts[1], 10, 64)
 
-	if ms == lastParts[0] {
-		if lastParts[0] == "1" {
-
-			return fmt.Sprintf("%s-%d", ms, lastSeq+1)
-		}
+	// If ms matches last entry → increment sequence
+	if ms == lastMs {
+		return fmt.Sprintf("%s-%d", ms, lastSeq+1)
 	}
 
-	return fmt.Sprintf("%s-%d", ms, 0)
+	// Otherwise, start fresh at 0
+	return fmt.Sprintf("%s-0", ms)
 }
 
 func handleTimeAndSeq(key string) string {
-	 ms := time.Now().UnixMilli()
-        newID := fmt.Sprintf("%d-0", ms)
-        redisStreamKeyWithTimeAndSequence[key] = newID
-        return newID
+	ms := time.Now().UnixMilli()
+
+	lastID := redisStreamKeyWithTimeAndSequence[key]
+	if lastID == "" {
+		return fmt.Sprintf("%d-0", ms)
+	}
+
+	lastParts := strings.Split(lastID, "-")
+	lastMs, _ := strconv.ParseInt(lastParts[0], 10, 64)
+	lastSeq, _ := strconv.ParseInt(lastParts[1], 10, 64)
+
+	if ms == lastMs {
+		// Same ms → bump seq
+		return fmt.Sprintf("%d-%d", ms, lastSeq+1)
+	}
+
+	// New ms → reset seq to 0
+	return fmt.Sprintf("%d-0", ms)
 }
