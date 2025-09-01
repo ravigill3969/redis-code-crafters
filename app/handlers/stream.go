@@ -141,6 +141,7 @@ func handleTimeAndSeq(key string) string {
 }
 
 func XRANGE(conn net.Conn, cmd []interface{}) {
+	fmt.Println(cmd)
 	streamKey := fmt.Sprintf("%s", cmd[0])
 	startSeq := fmt.Sprintf("%s", cmd[1])
 	endSeq := fmt.Sprintf("%s", cmd[2])
