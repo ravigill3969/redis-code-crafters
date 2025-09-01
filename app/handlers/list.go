@@ -129,14 +129,10 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 	}
 
 	key := fmt.Sprintf("%v", cmd[0])
-
-	loop, ok  := cmd[1].(int)
-
-	if !ok{
-		loop = 1
+	loop := 1
+	if len(cmd) == 2 {
+		loop = cmd[1].(int)
 	}
-
-	fmt.Println(loop)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -149,6 +145,8 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 	if loop > len(list) {
 		loop = len(list)
 	}
+
+	fmt.Println()
 
 	res := list[:loop]
 	fmt.Println(res)
