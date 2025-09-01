@@ -172,6 +172,7 @@ func XRANGE(conn net.Conn, cmd []interface{}) {
 		for _, key := range c.Fields {
 			fmt.Println(key)
 			val := c.Fields[key]
+			fmt.Println(val)
 			s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(key), key))
 			s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
 		}
