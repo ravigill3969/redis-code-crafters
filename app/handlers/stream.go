@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -139,6 +140,7 @@ func handleTimeAndSeq(key string) string {
 	// New ms → reset seq to 0
 	return fmt.Sprintf("%d-0", ms)
 }
+
 func XRANGE(conn net.Conn, cmd []interface{}) {
 	if len(cmd) < 3 {
 		conn.Write([]byte("-ERR wrong number of arguments for XRANGE\r\n"))
@@ -156,27 +158,45 @@ func XRANGE(conn net.Conn, cmd []interface{}) {
 	}
 
 	res := []StreamEntry{}
-
 	for _, e := range entries {
 		if idInRange(e.ID, startID, endID) {
 			res = append(res, e)
 		}
 	}
 
-	// Write as RESP Array
-	conn.Write([]byte(fmt.Sprintf("*%d\r\n", len(res))))
-	for _, e := range res {
-		// ID
-		conn.Write([]byte(fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(e.ID), e.ID)))
+	// Build RESP output in memory
+	var out strings.Builder
+	out.WriteString(fmt.Sprintf("*%d\r\n", len(res)))
 
-		// Fields as array
+	for _, e := range res {
+		// Outer array with 2 elements: ID + field array
+		out.WriteString(fmt.Sprintf("*2\r\n"))
+
+		// ID
+		out.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(e.ID), e.ID))
+
+		// Fields
 		fieldCount := len(e.Fields) * 2
-		conn.Write([]byte(fmt.Sprintf("*%d\r\n", fieldCount)))
-		for k, v := range e.Fields {
-			conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(k), k)))
-			conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v)))
+		out.WriteString(fmt.Sprintf("*%d\r\n", fieldCount))
+		for _, key := range sortedKeys(e.Fields) { // keep ordering deterministic
+			val := e.Fields[key]
+			out.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(key), key))
+			out.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
 		}
 	}
+
+	// Send in one write
+	conn.Write([]byte(out.String()))
+}
+
+// Optional: keep keys sorted so tests don’t fail due to map iteration order
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // Helper: checks if entryID is within startID and endID (inclusive)
