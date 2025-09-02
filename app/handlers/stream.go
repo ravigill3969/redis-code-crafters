@@ -16,6 +16,10 @@ type StreamEntry struct {
 	Fields map[string]string
 }
 
+type ParentStreamEntry struct {
+	res []StreamEntry
+}
+
 var redisStreams = map[string][]StreamEntry{}
 
 func XADD(cmd []interface{}) (string, error) {
@@ -146,7 +150,7 @@ func XRANGE(conn net.Conn, cmd []interface{}) {
 	startSeq := fmt.Sprintf("%s", cmd[1])
 	endSeq := fmt.Sprintf("%s", cmd[2])
 
-	if endSeq == "+"{
+	if endSeq == "+" {
 		endSeq = "999999999999-999999999"
 	}
 
@@ -160,7 +164,7 @@ func XRANGE(conn net.Conn, cmd []interface{}) {
 	var res []StreamEntry
 
 	for _, e := range entries {
-		if XrangeIsValidId(startSeq, endSeq, e.ID) {
+		if xrangeIsValidId(startSeq, endSeq, e.ID) {
 			res = append(res, e)
 		}
 	}
@@ -188,7 +192,7 @@ func XRANGE(conn net.Conn, cmd []interface{}) {
 
 }
 
-func XrangeIsValidId(startSeq, endSeq, loopId string) bool {
+func xrangeIsValidId(startSeq, endSeq, loopId string) bool {
 
 	startSplit := strings.Split(startSeq, "-")
 	endSplit := strings.Split(endSeq, "-")
@@ -216,6 +220,91 @@ func XrangeIsValidId(startSeq, endSeq, loopId string) bool {
 	}
 
 	if loopMS > endMS || (loopMS == endMS && loopSequ > endSequ) {
+		return false
+	}
+
+	return true
+}
+
+func XREAD(conn net.Conn, cmd []interface{}) {
+	// 	*<number of streams>
+	// *2
+	// $<len(streamName)>\r\nstreamName\r\n
+	// *<numEntries>
+	//   *2
+	//   $<len(entryID)>\r\nentryID\r\n
+	//   *<numFields>
+	//     $<len(field)>\r\nfield\r\n
+	//     $<len(value)>\r\nvalue\r\n
+
+	// [stream1, stream2, 1000-0, 2000-0]
+
+	namePointer := 0
+	seqPointer := len(cmd) / 2
+
+	var parentRes []ParentStreamEntry
+	var childRes []StreamEntry
+
+	for namePointer < len(cmd)/2 {
+		streamKey := fmt.Sprintf("%s", cmd[namePointer])
+		entries := redisStreams[streamKey]
+
+		for _, e := range entries {
+			if xreadIsValidId(fmt.Sprintf("%s", cmd[seqPointer]), e.ID) {
+				childRes = append(childRes, e)
+			}
+		}
+		parentRes = append(parentRes, ParentStreamEntry{res: childRes})
+		namePointer++
+		seqPointer++
+	}
+
+	var s strings.Builder
+
+	s.Write([]byte(fmt.Sprintf("*%d", len(cmd)/2))) // number of streams
+
+	for _, e := range parentRes {
+		s.Write([]byte(fmt.Sprintf("*%d", len(e.res))))
+
+		for _, c := range e.res {
+			s.Write([]byte(fmt.Sprintf("*%d\r\n", 2)))
+
+			s.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(c.ID), c.ID)))
+			s.Write([]byte(fmt.Sprintf("*%d\r\n", len(c.Fields)*2)))
+
+			for key := range c.Fields {
+				fmt.Println(key)
+				val := c.Fields[key]
+				fmt.Println(val)
+				s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(key), key))
+				s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
+			}
+		}
+	}
+
+	conn.Write([]byte(s.String()))
+
+}
+
+func xreadIsValidId(startSeq, loopId string) bool {
+	startSplit := strings.Split(startSeq, "-")
+	loopSplit := strings.Split(loopId, "-")
+
+	startMS, _ := strconv.ParseInt(startSplit[0], 10, 64)
+	loopMS, _ := strconv.ParseInt(loopSplit[0], 10, 64)
+
+	startSequ := int64(0)
+	if len(startSplit) == 2 {
+		startSequ, _ = strconv.ParseInt(startSplit[1], 10, 64)
+	}
+
+	loopSequ := int64(0)
+
+	if len(loopSplit) == 2 {
+		loopSequ, _ = strconv.ParseInt(loopSplit[1], 10, 64)
+	}
+
+	if loopMS < startMS || (loopSequ < startSequ && loopMS == startMS) {
 		return false
 	}
 
