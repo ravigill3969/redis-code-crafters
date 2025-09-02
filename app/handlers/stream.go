@@ -33,7 +33,7 @@ var listWaitersStream = ListWaitersStream{
 var redisStreams = map[string][]StreamEntry{}
 
 func XADD(cmd []interface{}) (string, error) {
-	rstream := fmt.Sprintf("%v", cmd[0])
+	streamKey := fmt.Sprintf("%v", cmd[0])
 	id := fmt.Sprintf("%v", cmd[1])
 
 	fields := map[string]string{}
@@ -41,17 +41,17 @@ func XADD(cmd []interface{}) (string, error) {
 
 	if id == "*" {
 		check = false
-		id = handleTimeAndSeq(rstream)
+		id = handleTimeAndSeq(streamKey)
 
 	} else if strings.HasSuffix(id, "-*") {
-		id = handleSeq(id, rstream)
+		id = handleSeq(id, streamKey)
 		check = false
 	} else if id == "0-0" {
 		return "", fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
 	}
 
 	if check {
-		if !isValidID(rstream, id) {
+		if !isValidID(streamKey, id) {
 			return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
 		}
 	}
@@ -70,9 +70,27 @@ func XADD(cmd []interface{}) (string, error) {
 		ID:     id,
 		Fields: fields,
 	}
-	redisStreams[rstream] = append(redisStreams[rstream], entry)
+	redisStreams[streamKey] = append(redisStreams[streamKey], entry)
 
-	redisStreamKeyWithTimeAndSequence[rstream] = id
+	redisStreamKeyWithTimeAndSequence[streamKey] = id
+
+	listWaitersStream.mu.Lock()
+	chans, ok := listWaitersStream.waiters[streamKey]
+	if ok && len(chans) > 0 {
+		val := redisStreams[streamKey][0]
+		redisStreams[streamKey] = redisStreams[streamKey][1:]
+
+		ch := chans[0]
+
+		listWaitersStream.waiters[streamKey] = listWaitersStream.waiters[streamKey][1:]
+
+		listWaitersStream.mu.Unlock()
+
+		go func() { ch <- val }()
+	} else {
+		listWaitersStream.mu.Unlock()
+
+	}
 
 	return id, nil
 }
