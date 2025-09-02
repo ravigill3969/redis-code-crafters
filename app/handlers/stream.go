@@ -21,13 +21,18 @@ type ParentStreamEntry struct {
 	res []StreamEntry
 }
 
+type Waiter struct {
+	seq string           // last seen ID for this client
+	ch  chan StreamEntry // channel to deliver new entries
+}
+
 type ListWaitersStream struct {
 	mu      sync.Mutex
-	waiters map[string][]chan StreamEntry
+	waiters map[string][]Waiter // per stream key
 }
 
 var listWaitersStream = ListWaitersStream{
-	waiters: make(map[string][]chan StreamEntry),
+	waiters: make(map[string][]Waiter),
 }
 
 var redisStreams = map[string][]StreamEntry{}
@@ -75,22 +80,19 @@ func XADD(cmd []interface{}) (string, error) {
 	redisStreamKeyWithTimeAndSequence[streamKey] = id
 
 	listWaitersStream.mu.Lock()
-	chans, ok := listWaitersStream.waiters[streamKey]
-	if ok && len(chans) > 0 {
-		val := redisStreams[streamKey][0]
-		redisStreams[streamKey] = redisStreams[streamKey][1:]
+	waiters := listWaitersStream.waiters[streamKey]
+	var remaining []Waiter
 
-		ch := chans[0]
-
-		listWaitersStream.waiters[streamKey] = listWaitersStream.waiters[streamKey][1:]
-
-		listWaitersStream.mu.Unlock()
-
-		go func() { ch <- val }()
-	} else {
-		listWaitersStream.mu.Unlock()
-
+	for _, w := range waiters {
+		if xreadIsValidId(w.seq, entry.ID) {
+			go func(ch chan StreamEntry, e StreamEntry) { ch <- e }(w.ch, entry)
+		} else {
+			remaining = append(remaining, w)
+		}
 	}
+
+	listWaitersStream.waiters[streamKey] = remaining
+	listWaitersStream.mu.Unlock()
 
 	return id, nil
 }
@@ -353,7 +355,8 @@ func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int64) {
 	ch := make(chan StreamEntry, 1)
 
 	listWaitersStream.mu.Lock()
-	listWaitersStream.waiters[streamKey] = append(listWaitersStream.waiters[streamKey], ch)
+	w := Waiter{seq: fmt.Sprintf("%s", cmd[len(cmd)-1]), ch: make(chan StreamEntry, 1)}
+	listWaitersStream.waiters["mystream"] = append(listWaitersStream.waiters["mystream"], w)
 	listWaitersStream.mu.Unlock()
 
 	// make sure stream exists
