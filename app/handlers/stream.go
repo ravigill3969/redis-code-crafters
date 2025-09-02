@@ -88,7 +88,7 @@ func XADD(cmd []interface{}) (string, error) {
 		if xreadIsValidId(w.seq, entry.ID) {
 			select {
 			case w.ch <- entry:
-			default: // if channel is full, drop
+			default: 
 			}
 		} else {
 			remaining = append(remaining, w)
@@ -360,7 +360,7 @@ func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int64) {
 
 	listWaitersStream.mu.Lock()
 	w := Waiter{seq: fmt.Sprintf("%s", cmd[len(cmd)-1]), ch: make(chan StreamEntry, 1)}
-	listWaitersStream.waiters["mystream"] = append(listWaitersStream.waiters["mystream"], w)
+	listWaitersStream.waiters[streamKey] = append(listWaitersStream.waiters[streamKey], w)
 	listWaitersStream.mu.Unlock()
 
 	// make sure stream exists
