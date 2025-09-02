@@ -297,7 +297,7 @@ func XREAD(conn net.Conn, cmdOrg []interface{}) {
 	blockStr := fmt.Sprintf("%s", cmdOrg[0])
 
 	if blockStr == "block" {
-		t, _ := cmdOrg[1].(int64)
+		t, _ := cmdOrg[1].(int)
 
 		handleBlockStream(conn, cmdOrg[3:], t)
 		return
@@ -356,7 +356,7 @@ func XREAD(conn net.Conn, cmdOrg []interface{}) {
 	conn.Write([]byte(s.String()))
 }
 
-func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int64) {
+func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int) {
 	streamKey := fmt.Sprintf("%s", cmd[0])
 	seq := fmt.Sprintf("%s", cmd[1]) // last seen ID
 
