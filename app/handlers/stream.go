@@ -299,6 +299,9 @@ func handleBlock(cmd []interface{}) []ParentStreamEntry {
 	fmt.Println("hit")
 	fmt.Println(cmd...)
 
+	return []ParentStreamEntry{
+		
+	}
 }
 
 func xreadIsValidId(startSeq, loopId string) bool {
