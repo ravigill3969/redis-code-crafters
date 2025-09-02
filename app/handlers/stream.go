@@ -23,11 +23,11 @@ type ParentStreamEntry struct {
 
 type ListWaitersStream struct {
 	mu      sync.Mutex
-	waiters map[string][]chan string
+	waiters map[string][]chan StreamEntry
 }
 
-var listWaitersS = ListWaitersStream{
-	waiters: make(map[string][]chan string),
+var listWaitersStream = ListWaitersStream{
+	waiters: make(map[string][]chan StreamEntry),
 }
 
 var redisStreams = map[string][]StreamEntry{}
@@ -268,7 +268,9 @@ func XREAD(conn net.Conn, cmdOrg []interface{}) {
 	blockStr := fmt.Sprintf("%s", cmdOrg[0])
 
 	if blockStr == "block" {
-		handleBlockStream(conn, cmdOrg[3:])
+		t, _ := strconv.ParseInt(fmt.Sprintf("%s", cmdOrg[1]), 10, 64)
+
+		handleBlockStream(conn, cmdOrg[3:], t)
 		return
 	}
 
@@ -325,6 +327,61 @@ func XREAD(conn net.Conn, cmdOrg []interface{}) {
 	conn.Write([]byte(s.String()))
 }
 
-func handleBlockStream(conn net.Conn, cmd []interface{}) {
-	fmt.Println("hit")
+func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int64) {
+	streamKey := fmt.Sprintf("%s", cmd[0])
+	seq := fmt.Sprintf("%s", cmd[1]) // last seen ID
+
+	// register a waiter
+	ch := make(chan StreamEntry, 1)
+
+	listWaitersStream.mu.Lock()
+	listWaitersStream.waiters[streamKey] = append(listWaitersStream.waiters[streamKey], ch)
+	listWaitersStream.mu.Unlock()
+
+	// make sure stream exists
+	if _, ok := redisStreams[streamKey]; !ok {
+		redisStreams[streamKey] = []StreamEntry{}
+	}
+
+	var entry StreamEntry
+	var ok bool
+
+	if blockMs == 0 {
+		// block until an entry comes
+		entry, ok = <-ch
+	} else {
+		// block with given time
+		select {
+		case entry, ok = <-ch:
+		case <-time.After(time.Duration(blockMs) * time.Millisecond):
+			conn.Write([]byte("*-1\r\n"))
+			return
+		}
+	}
+
+	if !ok {
+		conn.Write([]byte("*-1\r\n"))
+		return
+	}
+
+	if !xreadIsValidId(seq, entry.ID) {
+		conn.Write([]byte("*-1\r\n"))
+		return
+	}
+
+	var s strings.Builder
+	s.WriteString("*1\r\n")
+	s.WriteString("*2\r\n")
+	s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(streamKey), streamKey))
+	s.WriteString("*1\r\n")
+	s.WriteString("*2\r\n")
+	s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(entry.ID), entry.ID))
+
+	s.WriteString(fmt.Sprintf("*%d\r\n", len(entry.Fields)*2))
+	for k, v := range entry.Fields {
+		s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(k), k))
+		s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v))
+	}
+
+	conn.Write([]byte(s.String()))
 }
