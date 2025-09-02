@@ -82,6 +82,10 @@ func XADD(cmd []interface{}) (string, error) {
 
 		ch := chans[0]
 
+		if ch.seq == "$"{
+			fmt.Println("yses")
+		}
+
 		if xreadIsValidId(ch.seq, id) {
 
 			go func() {
