@@ -22,15 +22,16 @@ type ParentStreamEntry struct {
 }
 
 type Waiter struct {
-	seq string           // last seen ID for this client
-	ch  chan StreamEntry // channel to deliver new entries
+	seq string
+	ch  chan StreamEntry
 }
 
 type ListWaitersStream struct {
 	mu      sync.Mutex
-	waiters map[string][]Waiter // per stream key
+	waiters map[string][]Waiter
 }
 
+var redisStreamsMu sync.RWMutex
 var listWaitersStream = ListWaitersStream{
 	waiters: make(map[string][]Waiter),
 }
@@ -68,14 +69,14 @@ func XADD(cmd []interface{}) (string, error) {
 		}
 	}
 
-	entry := struct {
-		ID     string
-		Fields map[string]string
-	}{
+	entry := StreamEntry{
 		ID:     id,
 		Fields: fields,
 	}
+
+	redisStreamsMu.Lock()
 	redisStreams[streamKey] = append(redisStreams[streamKey], entry)
+	redisStreamsMu.Unlock()
 
 	redisStreamKeyWithTimeAndSequence[streamKey] = id
 
@@ -85,7 +86,10 @@ func XADD(cmd []interface{}) (string, error) {
 
 	for _, w := range waiters {
 		if xreadIsValidId(w.seq, entry.ID) {
-			go func(ch chan StreamEntry, e StreamEntry) { ch <- e }(w.ch, entry)
+			select {
+			case w.ch <- entry:
+			default: // if channel is full, drop
+			}
 		} else {
 			remaining = append(remaining, w)
 		}
