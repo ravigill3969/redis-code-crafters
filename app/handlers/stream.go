@@ -292,12 +292,12 @@ func XREAD(conn net.Conn, cmdOrg []interface{}) {
 
 	// [block 1000 streams mango 0-1]
 
-	fmt.Println(cmdOrg[1])
+	fmt.Println("xread start", cmdOrg[1])
 
 	blockStr := fmt.Sprintf("%s", cmdOrg[0])
 
 	if blockStr == "block" {
-		t, _ := strconv.ParseInt(fmt.Sprintf("%s", cmdOrg[1]), 10, 64)
+		t, _ := cmdOrg[1].(int64)
 
 		handleBlockStream(conn, cmdOrg[3:], t)
 		return
@@ -380,12 +380,12 @@ func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int64) {
 	fmt.Println(blockMs)
 	if blockMs == 0 {
 		entry, ok = <-ch
-		} else {
-			// block with given time
-			select {
-			case entry, ok = <-ch:
-			case <-time.After(time.Duration(blockMs) * time.Millisecond):
-				fmt.Println("timeout")
+	} else {
+		// block with given time
+		select {
+		case entry, ok = <-ch:
+		case <-time.After(time.Duration(blockMs) * time.Millisecond):
+			fmt.Println("timeout")
 			conn.Write([]byte("*-1\r\n"))
 			return
 		}
