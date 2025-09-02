@@ -239,8 +239,9 @@ func ParseRESP(raw string) []interface{} {
 				cmd = append(cmd, t)
 			}
 		case '$':
-
-			continue
+			if len(t) == 1 {
+				cmd = append(cmd, t)
+			}
 		default:
 			if i, err := strconv.Atoi(t); err == nil {
 				cmd = append(cmd, i)

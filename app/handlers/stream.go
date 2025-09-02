@@ -82,7 +82,7 @@ func XADD(cmd []interface{}) (string, error) {
 
 		ch := chans[0]
 
-		if ch.seq == "$"{
+		if ch.seq == "$" {
 			fmt.Println("yses")
 		}
 
@@ -295,8 +295,6 @@ func xreadIsValidId(startSeq, loopId string) bool {
 func XREAD(conn net.Conn, cmdOrg []interface{}) {
 	// [block 1000 streams mango 0-1]
 
-	fmt.Println("xread start", cmdOrg[1])
-
 	blockStr := fmt.Sprintf("%s", cmdOrg[0])
 
 	if blockStr == "block" {
@@ -381,14 +379,12 @@ func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int) {
 	var entry StreamEntry
 	var ok bool
 
-	fmt.Println(blockMs)
 	if blockMs == 0 {
 		entry, ok = <-ch
 	} else {
 		select {
 		case entry, ok = <-ch:
 		case <-time.After(time.Duration(blockMs) * time.Millisecond):
-			fmt.Println("timeout")
 			conn.Write([]byte("*-1\r\n"))
 			return
 		}
