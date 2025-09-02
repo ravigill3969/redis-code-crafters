@@ -21,19 +21,13 @@ type ParentStreamEntry struct {
 	res []StreamEntry
 }
 
-type Waiter struct {
-	seq string
-	ch  chan StreamEntry
-}
-
 type ListWaitersStream struct {
 	mu      sync.Mutex
-	waiters map[string][]Waiter
+	waiters map[string][]chan StreamEntry
 }
 
-var redisStreamsMu sync.RWMutex
 var listWaitersStream = ListWaitersStream{
-	waiters: make(map[string][]Waiter),
+	waiters: make(map[string][]chan StreamEntry),
 }
 
 var redisStreams = map[string][]StreamEntry{}
@@ -41,6 +35,21 @@ var redisStreams = map[string][]StreamEntry{}
 func XADD(cmd []interface{}) (string, error) {
 	streamKey := fmt.Sprintf("%v", cmd[0])
 	id := fmt.Sprintf("%v", cmd[1])
+
+	listWaitersStream.mu.Lock()
+	chans, ok := listWaitersStream.waiters[streamKey]
+	if ok && len(chans) > 0 {
+		val := redisStreams[streamKey][0]
+		redisStreams[streamKey] = redisStreams[streamKey][1:]
+
+		ch := chans[0]
+
+		listWaitersStream.waiters[streamKey] = listWaitersStream.waiters[streamKey][1:]
+
+		listWaitersStream.mu.Unlock()
+
+		go func() { ch <- val }()
+	}
 
 	fields := map[string]string{}
 	check := true
@@ -69,34 +78,16 @@ func XADD(cmd []interface{}) (string, error) {
 		}
 	}
 
-	entry := StreamEntry{
+	entry := struct {
+		ID     string
+		Fields map[string]string
+	}{
 		ID:     id,
 		Fields: fields,
 	}
-
-	redisStreamsMu.Lock()
 	redisStreams[streamKey] = append(redisStreams[streamKey], entry)
-	redisStreamsMu.Unlock()
 
 	redisStreamKeyWithTimeAndSequence[streamKey] = id
-
-	listWaitersStream.mu.Lock()
-	waiters := listWaitersStream.waiters[streamKey]
-	var remaining []Waiter
-
-	for _, w := range waiters {
-		if xreadIsValidId(w.seq, entry.ID) {
-			select {
-			case w.ch <- entry:
-			default: 
-			}
-		} else {
-			remaining = append(remaining, w)
-		}
-	}
-
-	listWaitersStream.waiters[streamKey] = remaining
-	listWaitersStream.mu.Unlock()
 
 	return id, nil
 }
@@ -359,8 +350,7 @@ func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int64) {
 	ch := make(chan StreamEntry, 1)
 
 	listWaitersStream.mu.Lock()
-	w := Waiter{seq: fmt.Sprintf("%s", cmd[len(cmd)-1]), ch: make(chan StreamEntry, 1)}
-	listWaitersStream.waiters[streamKey] = append(listWaitersStream.waiters[streamKey], w)
+	listWaitersStream.waiters[streamKey] = append(listWaitersStream.waiters[streamKey], ch)
 	listWaitersStream.mu.Unlock()
 
 	// make sure stream exists
