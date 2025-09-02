@@ -361,7 +361,8 @@ func XREAD(conn net.Conn, cmdOrg []interface{}) {
 
 func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int) {
 	streamKey := fmt.Sprintf("%s", cmd[0])
-	seq := fmt.Sprintf("%s", cmd[1]) // last seen ID
+	fmt.Println(cmd)
+	seq := fmt.Sprintf("%s", cmd[1])
 
 	ch := make(chan StreamEntry, 1)
 
@@ -384,7 +385,6 @@ func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int) {
 	if blockMs == 0 {
 		entry, ok = <-ch
 	} else {
-		// block with given time
 		select {
 		case entry, ok = <-ch:
 		case <-time.After(time.Duration(blockMs) * time.Millisecond):
