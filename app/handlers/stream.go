@@ -225,65 +225,55 @@ func xrangeIsValidId(startSeq, endSeq, loopId string) bool {
 
 	return true
 }
-
 func XREAD(conn net.Conn, cmd []interface{}) {
-	// 	*<number of streams>
-	// *2
-	// $<len(streamName)>\r\nstreamName\r\n
-	// *<numEntries>
-	//   *2
-	//   $<len(entryID)>\r\nentryID\r\n
-	//   *<numFields>
-	//     $<len(field)>\r\nfield\r\n
-	//     $<len(value)>\r\nvalue\r\n
-
-	// [stream1, stream2, 1000-0, 2000-0]
-
 	namePointer := 0
 	seqPointer := len(cmd) / 2
 
 	var parentRes []ParentStreamEntry
-	var childRes []StreamEntry
 
 	for namePointer < len(cmd)/2 {
 		streamKey := fmt.Sprintf("%s", cmd[namePointer])
 		entries := redisStreams[streamKey]
 
+		var childRes []StreamEntry
 		for _, e := range entries {
 			if xreadIsValidId(fmt.Sprintf("%s", cmd[seqPointer]), e.ID) {
 				childRes = append(childRes, e)
 			}
 		}
 		parentRes = append(parentRes, ParentStreamEntry{res: childRes})
+
 		namePointer++
 		seqPointer++
 	}
 
 	var s strings.Builder
+	s.WriteString(fmt.Sprintf("*%d\r\n", len(parentRes)))
 
-	s.Write([]byte(fmt.Sprintf("*%d", len(cmd)/2))) // number of streams
+	for i, e := range parentRes {
+		streamName := fmt.Sprintf("%s", cmd[i])
 
-	for _, e := range parentRes {
-		s.Write([]byte(fmt.Sprintf("*%d", len(e.res))))
+		s.WriteString("*2\r\n")
+
+		s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(streamName), streamName))
+
+		s.WriteString(fmt.Sprintf("*%d\r\n", len(e.res)))
 
 		for _, c := range e.res {
-			s.Write([]byte(fmt.Sprintf("*%d\r\n", 2)))
+			// entry = [id, fields]
+			s.WriteString("*2\r\n")
+			s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(c.ID), c.ID))
 
-			s.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(c.ID), c.ID)))
-			s.Write([]byte(fmt.Sprintf("*%d\r\n", len(c.Fields)*2)))
-
-			for key := range c.Fields {
-				fmt.Println(key)
-				val := c.Fields[key]
-				fmt.Println(val)
-				s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(key), key))
-				s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
+			// fields
+			s.WriteString(fmt.Sprintf("*%d\r\n", len(c.Fields)*2))
+			for k, v := range c.Fields {
+				s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(k), k))
+				s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v))
 			}
 		}
 	}
 
 	conn.Write([]byte(s.String()))
-
 }
 
 func xreadIsValidId(startSeq, loopId string) bool {
