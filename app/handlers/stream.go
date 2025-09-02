@@ -375,8 +375,8 @@ func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int64) {
 	var entry StreamEntry
 	var ok bool
 
+	fmt.Println(blockMs)
 	if blockMs == 0 {
-		fmt.Println("handling 0")
 		entry, ok = <-ch
 		} else {
 			// block with given time
