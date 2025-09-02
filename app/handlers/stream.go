@@ -36,21 +36,6 @@ func XADD(cmd []interface{}) (string, error) {
 	streamKey := fmt.Sprintf("%v", cmd[0])
 	id := fmt.Sprintf("%v", cmd[1])
 
-	listWaitersStream.mu.Lock()
-	chans, ok := listWaitersStream.waiters[streamKey]
-	if ok && len(chans) > 0 {
-		val := redisStreams[streamKey][0]
-		redisStreams[streamKey] = redisStreams[streamKey][1:]
-
-		ch := chans[0]
-
-		listWaitersStream.waiters[streamKey] = listWaitersStream.waiters[streamKey][1:]
-
-		listWaitersStream.mu.Unlock()
-
-		go func() { ch <- val }()
-	}
-
 	fields := map[string]string{}
 	check := true
 
@@ -88,6 +73,24 @@ func XADD(cmd []interface{}) (string, error) {
 	redisStreams[streamKey] = append(redisStreams[streamKey], entry)
 
 	redisStreamKeyWithTimeAndSequence[streamKey] = id
+
+	listWaitersStream.mu.Lock()
+	chans, ok := listWaitersStream.waiters[streamKey]
+	if ok && len(chans) > 0 {
+		val := redisStreams[streamKey][0]
+		redisStreams[streamKey] = redisStreams[streamKey][1:]
+
+		ch := chans[0]
+
+		listWaitersStream.waiters[streamKey] = listWaitersStream.waiters[streamKey][1:]
+
+		listWaitersStream.mu.Unlock()
+
+		go func() { ch <- val }()
+	} else {
+		listWaitersStream.mu.Unlock()
+
+	}
 
 	return id, nil
 }
