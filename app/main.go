@@ -201,11 +201,8 @@ func handleConnection(conn net.Conn) {
 			handlers.XRANGE(conn, cmdParser[1:])
 
 		case "XREAD":
-			isBlock := false
-			if cmdParser[1] == "BLOCK" {
-				isBlock = true
-			}
-			handlers.XREAD(conn, cmdParser[2:], isBlock)
+
+			handlers.XREAD(conn, cmdParser[1:])
 
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))

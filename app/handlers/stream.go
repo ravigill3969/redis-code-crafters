@@ -23,11 +23,11 @@ type ParentStreamEntry struct {
 
 type ListWaitersStream struct {
 	mu      sync.Mutex
-	waiters map[string][]chan StreamEntry
+	waiters map[string][]chan string
 }
 
-var listWaitersStream = ListWaitersStream{
-	waiters: make(map[string][]chan StreamEntry),
+var listWaitersS = ListWaitersStream{
+	waiters: make(map[string][]chan string),
 }
 
 var redisStreams = map[string][]StreamEntry{}
@@ -236,7 +236,44 @@ func xrangeIsValidId(startSeq, endSeq, loopId string) bool {
 	return true
 }
 
-func XREAD(conn net.Conn, cmd []interface{}, isBlock bool) {
+func xreadIsValidId(startSeq, loopId string) bool {
+	startSplit := strings.Split(startSeq, "-")
+	loopSplit := strings.Split(loopId, "-")
+
+	startMS, _ := strconv.ParseInt(startSplit[0], 10, 64)
+	loopMS, _ := strconv.ParseInt(loopSplit[0], 10, 64)
+
+	startSequ := int64(0)
+	if len(startSplit) == 2 {
+		startSequ, _ = strconv.ParseInt(startSplit[1], 10, 64)
+	}
+
+	loopSequ := int64(0)
+
+	if len(loopSplit) == 2 {
+		loopSequ, _ = strconv.ParseInt(loopSplit[1], 10, 64)
+	}
+
+	if loopMS < startMS || (loopSequ < startSequ && loopMS == startMS) {
+		return false
+	}
+
+	return true
+}
+
+func XREAD(conn net.Conn, cmdOrg []interface{}, isBlock bool) {
+
+	// [block 1000 streams mango 0-1]
+
+	blockStr := fmt.Sprintf("%s", cmdOrg[0])
+
+	if blockStr == "block" {
+		handleBlockStream(conn, cmdOrg[3:])
+		return
+	}
+
+	cmd := cmdOrg[1:]
+
 	namePointer := 0
 	seqPointer := len(cmd) / 2
 
@@ -259,13 +296,6 @@ func XREAD(conn net.Conn, cmd []interface{}, isBlock bool) {
 	}
 
 	var s strings.Builder
-	if len(parentRes) == 0 && isBlock {
-		parentRes = handleBlock(cmd)
-	}
-
-	if len(parentRes) == 0 {
-		conn.Write([]byte("*-1\r\n"))
-	}
 
 	s.WriteString(fmt.Sprintf("*%d\r\n", len(parentRes)))
 
@@ -295,33 +325,6 @@ func XREAD(conn net.Conn, cmd []interface{}, isBlock bool) {
 	conn.Write([]byte(s.String()))
 }
 
-func handleBlock(cmd []interface{}) []ParentStreamEntry {
+func handleBlockStream(conn net.Conn, cmd []interface{}) {
 	fmt.Println("hit")
-	return []ParentStreamEntry{}
-
-}
-
-func xreadIsValidId(startSeq, loopId string) bool {
-	startSplit := strings.Split(startSeq, "-")
-	loopSplit := strings.Split(loopId, "-")
-
-	startMS, _ := strconv.ParseInt(startSplit[0], 10, 64)
-	loopMS, _ := strconv.ParseInt(loopSplit[0], 10, 64)
-
-	startSequ := int64(0)
-	if len(startSplit) == 2 {
-		startSequ, _ = strconv.ParseInt(startSplit[1], 10, 64)
-	}
-
-	loopSequ := int64(0)
-
-	if len(loopSplit) == 2 {
-		loopSequ, _ = strconv.ParseInt(loopSplit[1], 10, 64)
-	}
-
-	if loopMS < startMS || (loopSequ < startSequ && loopMS == startMS) {
-		return false
-	}
-
-	return true
 }
