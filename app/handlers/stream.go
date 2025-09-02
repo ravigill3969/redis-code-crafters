@@ -297,11 +297,8 @@ func XREAD(conn net.Conn, cmd []interface{}, isBlock bool) {
 
 func handleBlock(cmd []interface{}) []ParentStreamEntry {
 	fmt.Println("hit")
-	fmt.Println(cmd...)
+	return []ParentStreamEntry{}
 
-	return []ParentStreamEntry{
-		
-	}
 }
 
 func xreadIsValidId(startSeq, loopId string) bool {
