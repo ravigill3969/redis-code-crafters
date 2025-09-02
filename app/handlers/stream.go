@@ -376,13 +376,14 @@ func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int64) {
 	var ok bool
 
 	if blockMs == 0 {
-		// block until an entry comes
+		fmt.Println("handling 0")
 		entry, ok = <-ch
-	} else {
-		// block with given time
-		select {
-		case entry, ok = <-ch:
-		case <-time.After(time.Duration(blockMs) * time.Millisecond):
+		} else {
+			// block with given time
+			select {
+			case entry, ok = <-ch:
+			case <-time.After(time.Duration(blockMs) * time.Millisecond):
+				fmt.Println("timeout")
 			conn.Write([]byte("*-1\r\n"))
 			return
 		}
