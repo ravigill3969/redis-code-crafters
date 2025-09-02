@@ -5,6 +5,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -18,6 +19,15 @@ type StreamEntry struct {
 
 type ParentStreamEntry struct {
 	res []StreamEntry
+}
+
+type ListWaitersStream struct {
+	mu      sync.Mutex
+	waiters map[string][]chan StreamEntry
+}
+
+var listWaitersStream = ListWaitersStream{
+	waiters: make(map[string][]chan StreamEntry),
 }
 
 var redisStreams = map[string][]StreamEntry{}
@@ -225,7 +235,8 @@ func xrangeIsValidId(startSeq, endSeq, loopId string) bool {
 
 	return true
 }
-func XREAD(conn net.Conn, cmd []interface{}) {
+
+func XREAD(conn net.Conn, cmd []interface{}, isBlock bool) {
 	namePointer := 0
 	seqPointer := len(cmd) / 2
 
@@ -248,6 +259,14 @@ func XREAD(conn net.Conn, cmd []interface{}) {
 	}
 
 	var s strings.Builder
+	if len(parentRes) == 0 && isBlock {
+		parentRes = handleBlock(cmd)
+	}
+
+	if len(parentRes) == 0 {
+		conn.Write([]byte("*-1\r\n"))
+	}
+
 	s.WriteString(fmt.Sprintf("*%d\r\n", len(parentRes)))
 
 	for i, e := range parentRes {
@@ -274,6 +293,12 @@ func XREAD(conn net.Conn, cmd []interface{}) {
 	}
 
 	conn.Write([]byte(s.String()))
+}
+
+func handleBlock(cmd []interface{}) []ParentStreamEntry {
+	fmt.Println("hit")
+	fmt.Println(cmd...)
+
 }
 
 func xreadIsValidId(startSeq, loopId string) bool {
