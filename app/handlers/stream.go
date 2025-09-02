@@ -292,6 +292,8 @@ func XREAD(conn net.Conn, cmdOrg []interface{}) {
 
 	// [block 1000 streams mango 0-1]
 
+	fmt.Println(cmdOrg...)
+
 	blockStr := fmt.Sprintf("%s", cmdOrg[0])
 
 	if blockStr == "block" {
