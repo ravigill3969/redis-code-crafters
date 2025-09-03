@@ -28,8 +28,6 @@ func main() {
 		fmt.Println("Port is:", PORT)
 	}
 
-	// $11\r\nrole:master\r\n
-
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", PORT))
 	// l, err := net.Listen("tcp", "127.0.0.1:6700")
 
@@ -53,15 +51,6 @@ func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	buffer := make([]byte, 4096)
 
-	if len(os.Args) == 5 && strings.ToUpper(os.Args[3]) == "INFO" && strings.ToUpper(os.Args[4]) == "REPLICATION" {
-		conn.Write([]byte("$11\r\nrole:master\r\n"))
-	}
-
-	if len(os.Args) == 3 && strings.ToUpper(os.Args[3]) == "INFO" && strings.ToUpper(os.Args[4]) == "REPLICATION" {
-		conn.Write([]byte("$11\r\nrole:master\r\n"))
-
-	}
-
 	var inTx bool
 	var txQueue [][]interface{}
 
@@ -76,9 +65,7 @@ func handleConnection(conn net.Conn) {
 			continue
 		}
 
-		fmt.Println(cmdParser...)
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
-		fmt.Println(cmd)
 
 		switch cmd {
 		case "MULTI":
@@ -251,6 +238,9 @@ func runCmds(conn net.Conn, cmdParser []interface{}) {
 	case "INCR":
 		handlers.INCR(cmdParser[1:], conn)
 
+	case "INFO":
+		handlers.INFO(conn, cmdParser)
+
 	default:
 		conn.Write([]byte("-ERR unknown command\r\n"))
 
@@ -270,6 +260,7 @@ func tokenizeRESP(raw string) []string {
 
 	return tokens
 }
+
 func ParseRESP(raw string) []interface{} {
 	lines := tokenizeRESP(raw)
 	cmd := []interface{}{}
