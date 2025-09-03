@@ -150,6 +150,7 @@ func handleConnection(conn net.Conn) {
 			key := fmt.Sprintf("%s", cmdParser[1])
 			val, ok := handlers.BLPOP(cmdParser[1:])
 
+			fmt.Println(val)
 			if ok {
 				fmt.Fprintf(conn, "*2\r\n")
 				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(key), key)
