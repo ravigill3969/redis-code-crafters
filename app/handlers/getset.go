@@ -52,6 +52,6 @@ func INCR(cmd []interface{}, conn net.Conn) {
 
 	redisKeyValueStore[key] = redisKeyValueStore[key].(int) + 1
 
-	conn.Write([]byte(fmt.Sprintf(":%d\r\n", redisKeyValueStore[key])))
+	fmt.Fprintf(conn, ":%d\r\n", redisKeyValueStore[key])
 
 }

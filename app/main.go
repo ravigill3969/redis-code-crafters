@@ -177,6 +177,8 @@ func handleConnection(conn net.Conn) {
 
 			handlers.XREAD(conn, cmdParser[1:])
 
+		case "INCR":
+			handlers.INCR(cmdParser[1:], conn)
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 
