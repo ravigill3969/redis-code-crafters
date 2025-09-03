@@ -86,7 +86,6 @@ func handleConnection(conn net.Conn) {
 			txQueue = nil
 
 		default:
-
 			if inTx {
 				txQueue = append(txQueue, cmdParser)
 				conn.Write([]byte("+QUEUED\r\n"))
