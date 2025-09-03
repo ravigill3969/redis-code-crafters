@@ -51,15 +51,21 @@ func GET(cmd []interface{}, conn net.Conn) {
 func INCR(cmd []interface{}, conn net.Conn) {
 	key := fmt.Sprintf("%v", cmd[0])
 
-	val, ok := redisKeyValueStore[key]
+	_, ok := redisKeyValueStore[key]
 
 	if !ok {
 		redisKeyValueStore[key] = 1
 
 	} else {
-		redisKeyValueStore[key] = val.(int) + 1
+		switch redisKeyValueStore[key].(type) {
+		case int:
+			redisKeyValueStore[key] = redisKeyValueStore[key].(int) + 1
+			fmt.Fprintf(conn, ":%d\r\n", redisKeyValueStore[key])
+
+		default:
+			fmt.Fprintf(conn, "-ERR value is not an integer or out of range\r\n")
+
+		}
+
 	}
-
-	fmt.Fprintf(conn, ":%d\r\n", redisKeyValueStore[key])
-
 }
