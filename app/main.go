@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,14 +20,22 @@ var redisKeyTypeStore = make(map[string]string)
 var mu sync.RWMutex
 
 func main() {
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+
+	PORT := "6379"
+
+	if len(os.Args) == 3 && os.Args[1] == "--port" {
+		PORT = os.Args[2]
+		fmt.Println("Port is:", PORT)
+	}
+
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", PORT))
 	// l, err := net.Listen("tcp", "127.0.0.1:6700")
 
 	if err != nil {
 		fmt.Println("Failed to bind port:", err)
 		return
 	}
-	fmt.Println("Server listening on 6379")
+	fmt.Println("Server listening on %s" , PORT)
 
 	for {
 		conn, err := l.Accept()
