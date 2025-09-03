@@ -55,6 +55,7 @@ func INCR(cmd []interface{}, conn net.Conn) {
 
 	if !ok {
 		redisKeyValueStore[key] = 1
+		fmt.Fprintf(conn, ":%d\r\n", redisKeyValueStore[key])
 
 	} else {
 		switch redisKeyValueStore[key].(type) {
@@ -64,7 +65,6 @@ func INCR(cmd []interface{}, conn net.Conn) {
 
 		default:
 			fmt.Fprintf(conn, "-ERR value is not an integer or out of range\r\n")
-
 		}
 
 	}
