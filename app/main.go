@@ -17,6 +17,8 @@ var redisKeyExpiryTime = make(map[string]time.Time)
 
 var redisKeyTypeStore = make(map[string]string)
 
+var isSlave = false
+
 var mu sync.RWMutex
 
 func main() {
@@ -108,7 +110,6 @@ func handleConnection(conn net.Conn) {
 				runCmds(conn, cmdParser)
 			}
 		}
-
 	}
 }
 
