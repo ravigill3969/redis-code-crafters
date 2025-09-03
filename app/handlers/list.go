@@ -43,7 +43,7 @@ func RPUSH(cmd []interface{}) (int, error) {
 		listWaiters.waiters[key] = chans[1:]
 		listWaiters.mu.Unlock()
 
-		fmt.Println(val)
+		fmt.Println(val ,"inside rpush")
 
 		go func() { ch <- val }()
 	} else {
@@ -180,12 +180,12 @@ func BLPOP(cmd []interface{}) (string, bool) {
 
 	if timeoutSec == 0 {
 		val := <-ch
-		fmt.Println(val)
+		fmt.Println(val ,"inside blpop")
 		return val, true
 	} else {
 		select {
 		case val := <-ch:
-			fmt.Println(val)
+		fmt.Println(val ,"inside blpop time lmit")
 			return val, true
 		case <-time.After(time.Duration(timeoutSec * float64(time.Second))):
 			return "", false
