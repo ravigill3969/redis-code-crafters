@@ -30,6 +30,7 @@ func SET(cmdParser []interface{}, conn net.Conn) {
 func GET(cmd []interface{}, conn net.Conn) {
 	key := fmt.Sprintf("%v", cmd[0])
 	mu.Lock()
+	fmt.Println("hiy")
 
 	if expiry, ok := redisKeyExpiryTime[key]; ok && expiry.Before(time.Now()) {
 		delete(redisKeyExpiryTime, key)
@@ -38,6 +39,8 @@ func GET(cmd []interface{}, conn net.Conn) {
 
 	value, ok := redisKeyValueStore[key]
 	mu.Unlock()
+
+	fmt.Println(value)
 
 	if !ok {
 		conn.Write([]byte("$-1\r\n"))
