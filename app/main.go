@@ -14,7 +14,6 @@ import (
 // Global store
 var redisKeyValueStore = make(map[string]interface{})
 var redisKeyExpiryTime = make(map[string]time.Time)
-var redisListStore = make(map[string][]string)
 
 var redisKeyTypeStore = make(map[string]string)
 
@@ -67,47 +66,21 @@ func handleConnection(conn net.Conn) {
 			}
 
 		case "SET":
-			if len(cmdParser) < 3 {
+			if len(cmdParser) < 2 {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
-				break
+
 			}
 			key := fmt.Sprintf("%v", cmdParser[1])
-			value := cmdParser[2]
 
-			mu.Lock()
-			redisKeyValueStore[key] = value
 			redisKeyTypeStore[key] = "string"
-
-			if len(cmdParser) > 3 && strings.ToUpper(fmt.Sprintf("%v", cmdParser[3])) == "PX" {
-				ms, _ := strconv.Atoi(fmt.Sprintf("%v", cmdParser[4]))
-				redisKeyExpiryTime[key] = time.Now().Add(time.Duration(ms) * time.Millisecond)
-			}
-			mu.Unlock()
-			conn.Write([]byte("+OK\r\n"))
+			handlers.SET(cmdParser[1:], conn)
 
 		case "GET":
 			if len(cmdParser) < 2 {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
-				break
-			}
-			key := fmt.Sprintf("%v", cmdParser[1])
-
-			mu.Lock()
-
-			if expiry, ok := redisKeyExpiryTime[key]; ok && expiry.Before(time.Now()) {
-				delete(redisKeyExpiryTime, key)
-				delete(redisKeyValueStore, key)
 			}
 
-			value, ok := redisKeyValueStore[key]
-			mu.Unlock()
-
-			if !ok {
-				conn.Write([]byte("$-1\r\n"))
-			} else {
-				valStr := fmt.Sprintf("%v", value)
-				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(valStr), valStr)
-			}
+			handlers.GET(cmdParser, conn)
 
 		case "TYPE":
 			key, ok := cmdParser[1].(string)
