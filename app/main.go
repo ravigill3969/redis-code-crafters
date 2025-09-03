@@ -68,9 +68,15 @@ func handleConnection(conn net.Conn) {
 			conn.Write([]byte("+OK\r\n"))
 
 		case "DISCARD":
-			inTx = false
-			txQueue = nil
-			conn.Write([]byte("+OK\r\n"))
+
+			if inTx {
+
+				txQueue = nil
+				conn.Write([]byte("+OK\r\n"))
+				inTx = false
+			} else {
+				conn.Write([]byte("-ERR DISCARD without MULTI\r\n"))
+			}
 
 		case "EXEC":
 			if !inTx {
