@@ -31,7 +31,6 @@ func GET(cmd []interface{}, conn net.Conn) {
 	key := fmt.Sprintf("%v", cmd[0])
 	mu.Lock()
 
-	fmt.Println(key)
 	expiry, ok := redisKeyExpiryTime[key]
 	if ok && expiry.Before(time.Now()) {
 		delete(redisKeyExpiryTime, key)
@@ -40,8 +39,6 @@ func GET(cmd []interface{}, conn net.Conn) {
 
 	value, ok := redisKeyValueStore[key]
 	mu.Unlock()
-
-	fmt.Println(value)
 
 	if !ok {
 		conn.Write([]byte("$-1\r\n"))
@@ -54,7 +51,14 @@ func GET(cmd []interface{}, conn net.Conn) {
 func INCR(cmd []interface{}, conn net.Conn) {
 	key := fmt.Sprintf("%v", cmd[0])
 
-	redisKeyValueStore[key] = redisKeyValueStore[key].(int) + 1
+	val, ok := redisKeyValueStore[key]
+
+	if !ok {
+		redisKeyValueStore[key] = 1
+
+	} else {
+		redisKeyValueStore[key] = val.(int) + 1
+	}
 
 	fmt.Fprintf(conn, ":%d\r\n", redisKeyValueStore[key])
 
