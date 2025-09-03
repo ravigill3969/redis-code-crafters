@@ -63,7 +63,7 @@ func handleConnection(conn net.Conn) {
 		switch cmd {
 		case "MULTI":
 			inTx = true
-			txQueue = [][]interface{}{}
+			txQueue = [][]any{}
 
 			conn.Write([]byte("+OK\r\n"))
 
@@ -94,8 +94,6 @@ func handleConnection(conn net.Conn) {
 				runCmds(conn, cmdParser)
 			}
 		}
-
-		runCmds(conn, cmdParser)
 
 	}
 }
