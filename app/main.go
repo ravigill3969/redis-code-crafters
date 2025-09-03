@@ -179,6 +179,10 @@ func handleConnection(conn net.Conn) {
 
 		case "INCR":
 			handlers.INCR(cmdParser[1:], conn)
+
+		case "MULTI":
+			conn.Write([]byte("+OK\r\n"))
+
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 
