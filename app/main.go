@@ -80,7 +80,7 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 			}
 
-			handlers.GET(cmdParser, conn)
+			handlers.GET(cmdParser[1:], conn)
 
 		case "TYPE":
 			key, ok := cmdParser[1].(string)
