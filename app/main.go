@@ -28,6 +28,8 @@ func main() {
 		fmt.Println("Port is:", PORT)
 	}
 
+	// $11\r\nrole:master\r\n
+
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", PORT))
 	// l, err := net.Listen("tcp", "127.0.0.1:6700")
 
@@ -35,7 +37,7 @@ func main() {
 		fmt.Println("Failed to bind port:", err)
 		return
 	}
-	fmt.Println("Server listening on %s" , PORT)
+	fmt.Printf("Server listening on %s", PORT)
 
 	for {
 		conn, err := l.Accept()
@@ -50,6 +52,10 @@ func main() {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	buffer := make([]byte, 4096)
+
+	if strings.ToUpper(os.Args[3]) == "INFO" && strings.ToUpper(os.Args[4]) == "REPLICATION" {
+		conn.Write([]byte("$11\r\nrole:master\r\n"))
+	}
 
 	var inTx bool
 	var txQueue [][]interface{}
