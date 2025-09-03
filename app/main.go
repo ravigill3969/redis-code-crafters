@@ -53,9 +53,13 @@ func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	buffer := make([]byte, 4096)
 
-
 	if len(os.Args) == 5 && strings.ToUpper(os.Args[3]) == "INFO" && strings.ToUpper(os.Args[4]) == "REPLICATION" {
 		conn.Write([]byte("$11\r\nrole:master\r\n"))
+	}
+
+	if len(os.Args) == 3 && strings.ToUpper(os.Args[3]) == "INFO" && strings.ToUpper(os.Args[4]) == "REPLICATION" {
+		conn.Write([]byte("$11\r\nrole:master\r\n"))
+
 	}
 
 	var inTx bool
