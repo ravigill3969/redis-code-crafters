@@ -67,6 +67,8 @@ func handleConnection(conn net.Conn) {
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
+		fmt.Println(cmdParser...)
+
 		switch cmd {
 		case "MULTI":
 			inTx = true
