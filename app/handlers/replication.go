@@ -18,5 +18,5 @@ func INFO(conn net.Conn, cmd []interface{}) {
 
 	r := "role:" + role
 
-	conn.Write([]byte(fmt.Sprintf("$%d\r\n:%s\r\n", len(r), r)))
+	conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(r), r)))
 }
