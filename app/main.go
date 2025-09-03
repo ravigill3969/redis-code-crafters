@@ -25,9 +25,11 @@ func main() {
 
 	PORT := "6379"
 
-	if len(os.Args) == 3 && os.Args[1] == "--port" {
-		PORT = os.Args[2]
-		fmt.Println("Port is:", PORT)
+	for i := 1; i < len(os.Args); i++ {
+		if os.Args[i] == "--port" && i+1 < len(os.Args) {
+			PORT = os.Args[i+1]
+			i++ // skip next argument
+		}
 	}
 
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", PORT))
