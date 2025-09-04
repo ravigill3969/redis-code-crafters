@@ -52,6 +52,8 @@ func main() {
 		}
 	}
 
+	fmt.Println(replicaHost, replicaPort)
+
 	if replicaHost != "" && replicaPort != "" {
 		conn, err := net.Dial("tcp", net.JoinHostPort(replicaHost, replicaPort))
 		if err != nil {
