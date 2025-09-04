@@ -65,7 +65,7 @@ func main() {
 }
 
 func handleConnection(conn net.Conn) {
-	defer conn.Close()
+
 	buffer := make([]byte, 4096)
 
 	var inTx bool
