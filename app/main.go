@@ -334,6 +334,8 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 	if err != nil {
 		log.Fatalf("Failed to connect to master: %v", err)
 	}
+
+	fmt.Println(conn, replicas)
 	replicas = append(replicas, conn)
 
 	defer conn.Close()
@@ -410,11 +412,8 @@ func sendPSYNC(conn net.Conn) {
 }
 
 func propagateToReplicas(cmd []string) {
-	fmt.Println(cmd, "propogation")
-
+	fmt.Println(replicas)
 	for _, r := range replicas {
-
-		fmt.Println(r, "propogation")
 
 		resp := encodeAsRESPArray(cmd)
 
