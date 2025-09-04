@@ -358,7 +358,6 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 	if err != nil {
 		log.Fatalf("Failed to connect to master: %v", err)
 	}
-	defer conn.Close()
 
 	// Send PING
 	conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
@@ -417,6 +416,7 @@ func sendPSYNC(conn net.Conn) {
 	resp := string(buf[:n])
 	log.Println("Received PSYNC response from master:", resp)
 }
+
 func propagateToReplicas(cmd []string) {
 	resp := encodeAsRESPArray(cmd)
 	mu.RLock()
@@ -431,7 +431,6 @@ func propagateToReplicas(cmd []string) {
 		}
 	}
 }
-
 
 func encodeAsRESPArray(cmd []string) string {
 	s := fmt.Sprintf("*%d\r\n", len(cmd))
