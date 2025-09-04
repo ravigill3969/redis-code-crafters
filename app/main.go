@@ -69,6 +69,7 @@ func main() {
 		go handleConnection(conn)
 	}
 }
+
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	buffer := make([]byte, 4096)
@@ -344,8 +345,24 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 		log.Fatalf("Failed to connect to master: %v", err)
 	}
 
-	fmt.Println(conn, replicas)
+	// Store the connection in the replicas slice
 	replicas = append(replicas, conn)
+	log.Println("Connected to master. Total replicas:", len(replicas))
+
+	// Spawn a goroutine to continuously read from the master
+	go func(c net.Conn) {
+		buf := make([]byte, 4096)
+		for {
+			n, err := c.Read(buf)
+			if err != nil {
+				log.Println("Master connection closed or error:", err)
+				removeReplica(c) // Remove dead connection from replicas slice
+				return
+			}
+			// For now, just discard the data
+			_ = buf[:n]
+		}
+	}(conn)
 
 	// ---- Stage 1: Send PING ----
 	ping := "*1\r\n$4\r\nPING\r\n"
@@ -355,10 +372,7 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 	}
 
 	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
-	if err != nil {
-		log.Fatalf("Failed to read PONG: %v", err)
-	}
+	n, _ := conn.Read(buf)
 	if string(buf[:n]) != "+PONG\r\n" {
 		log.Fatalf("Expected +PONG, got: %q", string(buf[:n]))
 	}
@@ -367,9 +381,22 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 	// ---- Stage 2: Send REPLCONF commands ----
 	sendReplConf(conn, replicaPort)
 
-	// Stage 3: PSYNC
+	// ---- Stage 3: Send PSYNC ----
 	sendPSYNC(conn)
 
+	log.Println("Replica handshake completed. Ready to propagate commands.")
+}
+
+func removeReplica(deadConn net.Conn) {
+	mu.Lock()
+	defer mu.Unlock()
+	for i, r := range replicas {
+		if r == deadConn {
+			replicas = append(replicas[:i], replicas[i+1:]...)
+			log.Println("Removed dead replica. Total replicas now:", len(replicas))
+			return
+		}
+	}
 }
 
 func sendReplConf(conn net.Conn, replicaPort string) {
