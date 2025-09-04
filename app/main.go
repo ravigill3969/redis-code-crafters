@@ -52,10 +52,8 @@ func main() {
 		}
 	}
 
-	fmt.Println(replicaHost, replicaPort)
-
 	if replicaHost != "" && replicaPort != "" {
-		conn, err := net.Dial("tcp", net.JoinHostPort(replicaHost, replicaPort))
+		conn, err := net.Dial("tcp", net.JoinHostPort(replicaHost, PORT))
 		if err != nil {
 			log.Fatalf("Failed to connect to master: %v", err)
 		}
@@ -79,7 +77,7 @@ func main() {
 			log.Fatalf("Expected +PONG, got: %s", pong)
 		}
 
-		sendReplConf(conn, replicaPort)
+		sendReplConf(conn, PORT)
 
 	}
 
