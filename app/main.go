@@ -239,6 +239,7 @@ func propagateToReplicas(cmd []string) {
 		}
 	}
 }
+
 func readFromMaster(conn net.Conn) {
 	buffer := make([]byte, 4096)
 	for {
@@ -253,6 +254,8 @@ func readFromMaster(conn net.Conn) {
 		if len(cmdParser) == 0 {
 			continue
 		}
+
+		
 
 		cmdName := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 		if cmdName == "REPLCONF" {

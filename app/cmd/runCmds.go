@@ -18,7 +18,9 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 	fmt.Println(cmdParser...)
 	switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) {
 	case "PING":
-		conn.Write([]byte("+PONG\r\n"))
+		if conn != nil {
+			conn.Write([]byte("+PONG\r\n"))
+		}
 
 	case "ECHO":
 		if len(cmdParser) > 1 {
