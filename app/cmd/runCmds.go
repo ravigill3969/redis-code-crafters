@@ -151,19 +151,20 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 		handlers.INFO(conn, cmdParser)
 
 	case "REPLCONF":
-
-		switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[1])) {
+		subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
+		switch subcmd {
 		case "LISTENING-PORT":
 			conn.Write([]byte("+OK\r\n"))
-
 		case "CAPA":
-			fmt.Println("CAPA")
 			conn.Write([]byte("+OK\r\n"))
-			
 		case "GETACK":
-			// This is the new part for this stage
-			fmt.Println("GETACK")
-			conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"))
+			ackResp := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
+			_, err := conn.Write([]byte(ackResp))
+			if err != nil {
+				fmt.Println("Failed to send ACK:", err)
+			} else {
+				fmt.Println("Sent REPLCONF ACK 0 to master")
+			}
 		}
 
 	case "PSYNC":
