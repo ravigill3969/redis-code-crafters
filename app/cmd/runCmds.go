@@ -16,7 +16,6 @@ var redisKeyTypeStore = make(map[string]string)
 
 func RunCmds(conn net.Conn, cmdParser []interface{}) {
 
-	fmt.Println(cmdParser, "indoe run cmds")
 
 	switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) {
 	case "PING":

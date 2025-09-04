@@ -71,6 +71,9 @@ func ParseRESP(raw string) []interface{} {
 		}
 	}
 
+		fmt.Println(cmd, "indoe parse cmds")
+
+
 	return cmd
 
 }
