@@ -147,6 +147,7 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 		handlers.INFO(conn, cmdParser)
 
 	case "REPLCONF":
+		fmt.Println("exec now")
 		subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
 		switch subcmd {
 		case "LISTENING-PORT", "CAPA":
