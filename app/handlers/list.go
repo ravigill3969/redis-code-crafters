@@ -20,9 +20,6 @@ var mu sync.RWMutex
 var RedisListStore = map[string][]string{}
 
 func RPUSH(cmd []interface{}) (int, error) {
-
-	fmt.Println(cmd, "cmds")
-
 	key := fmt.Sprintf("%v", cmd[0])
 	values := cmd[1:]
 
@@ -33,22 +30,19 @@ func RPUSH(cmd []interface{}) (int, error) {
 	newLen := len(RedisListStore[key])
 	mu.Unlock()
 
+	// Wake up as many waiters as possible
 	listWaiters.mu.Lock()
-	chans, ok := listWaiters.waiters[key]
-	if ok && len(chans) > 0 {
+	chans := listWaiters.waiters[key]
+	for len(RedisListStore[key]) > 0 && len(chans) > 0 {
 		val := RedisListStore[key][0]
 		RedisListStore[key] = RedisListStore[key][1:]
 
 		ch := chans[0]
-		listWaiters.waiters[key] = chans[1:]
-		listWaiters.mu.Unlock()
-
-		fmt.Println(val ,"inside rpush")
-
-		go func() { ch <- val }()
-	} else {
-		listWaiters.mu.Unlock()
+		chans = chans[1:]
+		go func(v string, c chan string) { c <- v }(val, ch)
 	}
+	listWaiters.waiters[key] = chans
+	listWaiters.mu.Unlock()
 
 	return newLen, nil
 }
@@ -110,7 +104,6 @@ func LPUSH(cmd []interface{}) (int, error) {
 	return len(RedisListStore[key]), nil
 
 }
-
 
 func LLEN(cmd []interface{}) int {
 	key := cmd[0].(string)
@@ -181,12 +174,12 @@ func BLPOP(cmd []interface{}) (string, bool) {
 
 	if timeoutSec == 0 {
 		val := <-ch
-		fmt.Println(val ,"inside blpop")
+		fmt.Println(val, "inside blpop")
 		return val, true
 	} else {
 		select {
 		case val := <-ch:
-		fmt.Println(val ,"inside blpop time lmit")
+			fmt.Println(val, "inside blpop time lmit")
 			return val, true
 		case <-time.After(time.Duration(timeoutSec * float64(time.Second))):
 			return "", false
@@ -194,4 +187,3 @@ func BLPOP(cmd []interface{}) (string, bool) {
 	}
 
 }
-
