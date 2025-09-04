@@ -146,7 +146,6 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("+QUEUED\r\n"))
 			} else {
 				runCmds(conn, cmdParser)
-				fmt.Println("%+v", conn)
 				writeCommands := map[string]bool{
 					"SET":  true,
 					"DEL":  true,
@@ -154,6 +153,7 @@ func handleConnection(conn net.Conn) {
 					"DECR": true,
 				}
 				if writeCommands[cmd] {
+					fmt.Println(cmdParser...)
 					strCmd := interfaceSliceToStringSlice(cmdParser)
 					propagateToReplicas(strCmd)
 				}
