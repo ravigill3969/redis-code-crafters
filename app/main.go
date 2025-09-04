@@ -22,6 +22,8 @@ var isSlave = false
 
 var mu sync.RWMutex
 
+var replicas []net.Conn
+
 func main() {
 	// Default replica port
 	PORT := "6379"
@@ -88,7 +90,8 @@ func handleConnection(conn net.Conn) {
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
-		fmt.Println(cmdParser...)
+		strCmd := interfaceSliceToStringSlice(cmdParser)
+		propagateToReplicas(strCmd)
 
 		switch cmd {
 		case "MULTI":
@@ -348,6 +351,8 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 
 	// Stage 3: PSYNC
 	sendPSYNC(conn)
+
+	replicas = append(replicas, conn)
 }
 
 func sendReplConf(conn net.Conn, replicaPort string) {
@@ -395,4 +400,35 @@ func sendPSYNC(conn net.Conn) {
 	n, _ := conn.Read(buf)
 	resp := string(buf[:n])
 	log.Println("Received PSYNC response from master:", resp)
+}
+
+func propagateToReplicas(cmd []string) {
+	for _, r := range replicas {
+		resp := encodeAsRESPArray(cmd) // convert []string -> RESP array
+		r.Write([]byte(resp))          // no response expected
+	}
+}
+
+func encodeAsRESPArray(cmd []string) string {
+	s := fmt.Sprintf("*%d\r\n", len(cmd))
+	for _, arg := range cmd {
+		s += fmt.Sprintf("$%d\r\n%s\r\n", len(arg), arg)
+	}
+	return s
+}
+
+func interfaceSliceToStringSlice(cmd []interface{}) []string {
+	strCmd := make([]string, len(cmd))
+	for i, arg := range cmd {
+		// assuming each arg is []byte (as it comes from the RESP parser)
+		switch v := arg.(type) {
+		case string:
+			strCmd[i] = v
+		case []byte:
+			strCmd[i] = string(v)
+		default:
+			strCmd[i] = fmt.Sprintf("%v", arg) // fallback
+		}
+	}
+	return strCmd
 }
