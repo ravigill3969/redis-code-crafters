@@ -223,7 +223,7 @@ func sendPSYNC(conn net.Conn) {
 	buf := make([]byte, 1024)
 	n, _ := conn.Read(buf)
 	resp := string(buf[:n])
-	log.Println("Received PSYNC response from master:", resp)
+	fmt.Println("Received PSYNC response from master:", resp)
 	fmt.Println("end of send psync")
 }
 
