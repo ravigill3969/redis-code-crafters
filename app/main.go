@@ -87,6 +87,7 @@ func handleConnection(conn net.Conn) {
 
 		if cmd == "REPLCONF" {
 			mu.Lock()
+			fmt.Println("yes")
 			isReplica = true
 			replicas[conn] = true
 			mu.Unlock()
