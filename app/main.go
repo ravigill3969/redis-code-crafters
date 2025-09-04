@@ -66,13 +66,12 @@ func main() {
 		}
 
 		log.Println("Replica connected to master and sent PING")
-		conn.Write([]byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n%d\r\n", replicaPort)))
-		time.Sleep(1 * time.Second)
-		conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"))
 	}
 
 	for {
 		conn, err := l.Accept()
+		sendReplConf(conn, replicaPort)
+
 		if err != nil {
 			fmt.Println("Error accepting connection:", err)
 			continue
@@ -324,4 +323,28 @@ func ParseRESP(raw string) []interface{} {
 	}
 
 	return cmd
+}
+
+func sendReplConf(conn net.Conn, replicaPort string) {
+	// 1. REPLCONF listening-port <PORT>
+	listeningPort := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$%d\r\n%s\r\n",
+		len(replicaPort), replicaPort)
+	_, err := conn.Write([]byte(listeningPort))
+	if err != nil {
+		log.Fatalf("Failed to send REPLCONF listening-port: %v", err)
+	}
+
+	// Optionally read master response (+OK)
+	buf := make([]byte, 1024)
+	_, _ = conn.Read(buf) // ignore content for now
+
+	// 2. REPLCONF capa psync2
+	replCapa := "*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"
+	_, err = conn.Write([]byte(replCapa))
+	if err != nil {
+		log.Fatalf("Failed to send REPLCONF capa: %v", err)
+	}
+	_, _ = conn.Read(buf) // ignore content for now
+
+	log.Println("Replica sent both REPLCONF commands")
 }
