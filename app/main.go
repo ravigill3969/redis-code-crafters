@@ -137,6 +137,7 @@ func handleConnection(conn net.Conn) {
 			} else {
 				runCmds(conn, cmdParser)
 				if writeCommands[cmd] {
+					fmt.Println("propegation", cmd)
 					propagateToReplicas(interfaceSliceToStringSlice(cmdParser))
 				}
 			}
@@ -413,10 +414,9 @@ func sendPSYNC(conn net.Conn) {
 
 func propagateToReplicas(cmd []string) {
 	for _, r := range replicas {
-		fmt.Fprintln(r)
+
 		resp := encodeAsRESPArray(cmd)
 
-		fmt.Println(resp)
 		r.Write([]byte(resp))
 	}
 }
