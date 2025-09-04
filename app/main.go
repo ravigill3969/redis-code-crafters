@@ -278,6 +278,7 @@ func handleReplicaCmd(cmdParser []interface{}, conn net.Conn) bool {
 
 	case "GETACK":
 		conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"))
+		return true
 	default:
 		conn.Write([]byte("-ERR unknown REPLCONF subcommand\r\n"))
 		return true
