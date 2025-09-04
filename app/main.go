@@ -8,15 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/codecrafters-io/redis-starter-go/app/handlers"
+	cmds "github.com/codecrafters-io/redis-starter-go/app/cmd"
+	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
-
-var redisKeyValueStore = make(map[string]interface{})
-var redisKeyExpiryTime = make(map[string]time.Time)
-
-var redisKeyTypeStore = make(map[string]string)
 
 var isSlave = false
 
@@ -83,7 +78,7 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 		raw := string(buffer[:n])
-		cmdParser := ParseRESP(raw)
+		cmdParser := utils.ParseRESP(raw)
 		if len(cmdParser) == 0 {
 			continue
 		}
@@ -126,8 +121,8 @@ func handleConnection(conn net.Conn) {
 			conn.Write([]byte("*" + strconv.Itoa(len(txQueue)) + "\r\n"))
 
 			for _, q := range txQueue {
-				runCmds(conn, q)
-				strCmd := interfaceSliceToStringSlice(q)
+				cmds.RunCmds(conn, q)
+				strCmd := utils.InterfaceSliceToStringSlice(q)
 				writeCommands := map[string]bool{
 					"SET":  true,
 					"DEL":  true,
@@ -146,7 +141,7 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("+QUEUED\r\n"))
 			} else {
 				// Execute the command first
-				runCmds(conn, cmdParser)
+				cmds.RunCmds(conn, cmdParser)
 
 				// Then propagate if it's a write command
 				writeCommands := map[string]bool{
@@ -156,206 +151,13 @@ func handleConnection(conn net.Conn) {
 					"DECR": true,
 				}
 				if writeCommands[cmd] {
-					strCmd := interfaceSliceToStringSlice(cmdParser)
+					strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
 					fmt.Println("Executing and propagating:", strCmd)
 					propagateToReplicas(strCmd)
 				}
 			}
 		}
 	}
-}
-
-func runCmds(conn net.Conn, cmdParser []interface{}) {
-	switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) {
-	case "PING":
-		conn.Write([]byte("+PONG\r\n"))
-
-	case "ECHO":
-		if len(cmdParser) > 1 {
-			conn.Write([]byte("+" + fmt.Sprintf("%v", cmdParser[1]) + "\r\n"))
-		} else {
-			conn.Write([]byte("+\r\n"))
-		}
-
-	case "SET":
-		fmt.Println("setting")
-		if len(cmdParser) < 2 {
-			conn.Write([]byte("-ERR wrong number of arguments\r\n"))
-
-		}
-
-		
-		key := fmt.Sprintf("%v", cmdParser[1])
-		
-		redisKeyTypeStore[key] = "string"
-		handlers.SET(cmdParser[1:], conn)
-
-	case "GET":
-		if len(cmdParser) < 2 {
-			conn.Write([]byte("-ERR wrong number of arguments\r\n"))
-		}
-
-		fmt.Println(cmdParser...)
-
-		handlers.GET(cmdParser[1:], conn)
-
-	case "TYPE":
-		key, ok := cmdParser[1].(string)
-		if !ok {
-			fmt.Fprintf(conn, "+none\r\n")
-			break
-		}
-
-		val, exists := redisKeyTypeStore[key]
-
-		if exists {
-			fmt.Fprintf(conn, "+%s\r\n", val)
-		} else {
-			fmt.Fprintf(conn, "+none\r\n")
-		}
-
-	case "LRANGE":
-		res, err := handlers.LRANGE(cmdParser[1:])
-		if err != nil {
-			conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
-		} else {
-			fmt.Fprintf(conn, "*%d\r\n", len(res))
-			for _, v := range res {
-				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(v), v)
-			}
-		}
-
-	case "LPUSH":
-		redisKeyTypeStore[cmdParser[1].(string)] = "list"
-		length, err := handlers.LPUSH(cmdParser[1:])
-		if err != nil {
-			conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
-		} else {
-			fmt.Fprintf(conn, ":%d\r\n", length)
-		}
-
-	case "LLEN":
-		length := handlers.LLEN(cmdParser[1:])
-
-		fmt.Fprintf(conn, ":%d\r\n", length)
-
-	case "LPOP":
-
-		res, ok := handlers.LPOP(cmdParser[1:])
-
-		if len(res) == 1 {
-			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(res[0]), res[0])
-		} else if ok {
-			fmt.Fprintf(conn, "*%d\r\n", len(res))
-			for _, v := range res {
-				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(v), v)
-			}
-		} else {
-			fmt.Fprintf(conn, "$-1\r\n")
-		}
-
-	case "RPUSH":
-		redisKeyTypeStore[cmdParser[1].(string)] = "list"
-		length, err := handlers.RPUSH(cmdParser[1:])
-		if err != nil {
-			conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
-		} else {
-			fmt.Fprintf(conn, ":%d\r\n", length)
-		}
-
-	case "BLPOP":
-		key := fmt.Sprintf("%s", cmdParser[1])
-		val, ok := handlers.BLPOP(cmdParser[1:])
-
-		fmt.Println(val)
-		if ok {
-			fmt.Fprintf(conn, "*2\r\n")
-			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(key), key)
-			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(val), val)
-		} else {
-			fmt.Fprintf(conn, "*-1\r\n")
-		}
-
-	case "XADD":
-		key := fmt.Sprintf("%s", cmdParser[1])
-		redisKeyTypeStore[key] = "stream"
-
-		id, err := handlers.XADD(cmdParser[1:])
-		if err != nil {
-			fmt.Fprintf(conn, "-%s\r\n", err.Error())
-		} else {
-			// send RESP bulk string with the ID
-			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
-		}
-
-	case "XRANGE":
-		handlers.XRANGE(conn, cmdParser[1:])
-
-	case "XREAD":
-
-		handlers.XREAD(conn, cmdParser[1:])
-
-	case "INCR":
-		handlers.INCR(cmdParser[1:], conn)
-
-	case "INFO":
-		handlers.INFO(conn, cmdParser)
-
-	case "REPLCONF":
-		fmt.Fprintf(conn, "+OK\r\n")
-
-	case "PSYNC":
-		handlers.PSYNC(conn)
-
-	default:
-		conn.Write([]byte("-ERR unknown command\r\n"))
-
-	}
-}
-
-func tokenizeRESP(raw string) []string {
-
-	clean := strings.ReplaceAll(raw, "\r\n", "\n")
-	lines := strings.Split(clean, "\n")
-	tokens := []string{}
-	for _, line := range lines {
-		if line != "" {
-			tokens = append(tokens, line)
-		}
-	}
-
-	return tokens
-}
-
-func ParseRESP(raw string) []interface{} {
-	lines := tokenizeRESP(raw)
-	cmd := []interface{}{}
-
-	for _, t := range lines {
-		if t == "" {
-			continue
-		}
-
-		switch t[0] {
-		case '*':
-			if len(t) == 1 {
-				cmd = append(cmd, t)
-			}
-		case '$':
-			if len(t) == 1 {
-				cmd = append(cmd, t)
-			}
-		default:
-			if i, err := strconv.Atoi(t); err == nil {
-				cmd = append(cmd, i)
-			} else {
-				cmd = append(cmd, t)
-			}
-		}
-	}
-
-	return cmd
-
 }
 
 func connectToMaster(masterHost, masterPort, replicaPort string) {
@@ -424,7 +226,7 @@ func sendPSYNC(conn net.Conn) {
 }
 
 func propagateToReplicas(cmd []string) {
-	resp := encodeAsRESPArray(cmd)
+	resp := utils.EncodeAsRESPArray(cmd)
 	mu.RLock()
 	defer mu.RUnlock()
 	fmt.Println("Propagating to replicas:", cmd, "Total replicas:", len(replicas))
@@ -438,30 +240,6 @@ func propagateToReplicas(cmd []string) {
 	}
 }
 
-func encodeAsRESPArray(cmd []string) string {
-	s := fmt.Sprintf("*%d\r\n", len(cmd))
-	for _, arg := range cmd {
-		s += fmt.Sprintf("$%d\r\n%s\r\n", len(arg), arg)
-	}
-	return s
-}
-
-func interfaceSliceToStringSlice(cmd []interface{}) []string {
-	strCmd := make([]string, len(cmd))
-	for i, arg := range cmd {
-		switch v := arg.(type) {
-		case string:
-			strCmd[i] = v
-		case []byte:
-			strCmd[i] = string(v)
-		default:
-			strCmd[i] = fmt.Sprintf("%v", arg) // fallback
-		}
-	}
-
-	return strCmd
-}
-
 func readFromMaster(conn net.Conn) {
 	buffer := make([]byte, 4096)
 	for {
@@ -472,11 +250,11 @@ func readFromMaster(conn net.Conn) {
 		}
 
 		raw := string(buffer[:n])
-		cmdParser := ParseRESP(raw)
+		cmdParser := utils.ParseRESP(raw)
 		if len(cmdParser) == 0 {
 			continue
 		}
 
-		runCmds(conn, cmdParser)
+		cmds.RunCmds(conn, cmdParser)
 	}
 }
