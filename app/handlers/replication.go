@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 )
 
 func INFO(conn net.Conn, cmd []interface{}) {
@@ -37,6 +38,7 @@ func PSYNC(conn net.Conn) {
 		0xFF,
 	}
 
+	time.Sleep(1000)
 	fmt.Fprintf(conn, "$%d\r\n", len(emptyRDB))
 
 	conn.Write(emptyRDB)
