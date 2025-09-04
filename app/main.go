@@ -94,7 +94,6 @@ func handleConnection(conn net.Conn) {
 			mu.Lock()
 			replicas = append(replicas, conn)
 			mu.Unlock()
-			log.Println("New replica connected. Total replicas:", len(replicas))
 			conn.Write([]byte("+OK\r\n"))
 			continue
 		}
@@ -145,7 +144,10 @@ func handleConnection(conn net.Conn) {
 				txQueue = append(txQueue, cmdParser)
 				conn.Write([]byte("+QUEUED\r\n"))
 			} else {
+				// Execute the command first
 				runCmds(conn, cmdParser)
+
+				// Then propagate if it's a write command
 				writeCommands := map[string]bool{
 					"SET":  true,
 					"DEL":  true,
@@ -153,8 +155,8 @@ func handleConnection(conn net.Conn) {
 					"DECR": true,
 				}
 				if writeCommands[cmd] {
-					fmt.Println(cmdParser...)
 					strCmd := interfaceSliceToStringSlice(cmdParser)
+					fmt.Println("Executing and propagating:", strCmd)
 					propagateToReplicas(strCmd)
 				}
 			}
@@ -416,12 +418,27 @@ func sendPSYNC(conn net.Conn) {
 }
 
 func propagateToReplicas(cmd []string) {
-	fmt.Println("Propagating to replicas:", cmd, "Total replicas:", len(replicas))
-	for _, r := range replicas {
-		resp := encodeAsRESPArray(cmd)
-		_, err := r.Write([]byte(resp))
+	mu.RLock()
+	replicasCopy := make([]net.Conn, len(replicas))
+	copy(replicasCopy, replicas)
+	mu.RUnlock()
+
+	fmt.Printf("Propagating to %d replicas: %v\n", len(replicasCopy), cmd)
+
+	respCmd := encodeAsRESPArray(cmd)
+	for i, r := range replicasCopy {
+		_, err := r.Write([]byte(respCmd))
 		if err != nil {
-			log.Println("Failed to propagate to replica:", err)
+			log.Printf("Failed to propagate to replica %d: %v", i, err)
+			// Remove failed replica
+			mu.Lock()
+			for j, replica := range replicas {
+				if replica == r {
+					replicas = append(replicas[:j], replicas[j+1:]...)
+					break
+				}
+			}
+			mu.Unlock()
 		}
 	}
 }
