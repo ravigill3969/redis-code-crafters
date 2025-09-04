@@ -346,7 +346,10 @@ func ParseRESP(raw string) []interface{} {
 		}
 	}
 
+	fmt.Println(cmd)
 	return cmd
+
+
 }
 
 func connectToMaster(masterHost, masterPort, replicaPort string) {
