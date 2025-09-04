@@ -267,9 +267,7 @@ func runCmds(conn net.Conn, cmdParser []interface{}) {
 		fmt.Fprintf(conn, "+OK\r\n")
 
 	case "PSYNC":
-		{
-			fmt.Fprintf(conn ,"+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n")
-		}
+		handlers.PSYNC(conn)
 
 	default:
 		conn.Write([]byte("-ERR unknown command\r\n"))

@@ -27,3 +27,17 @@ func INFO(conn net.Conn, cmd []interface{}) {
 
 	fmt.Fprint(conn, bulk)
 }
+
+func PSYNC(conn net.Conn) {
+	fmt.Fprintf(conn, "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n")
+
+	emptyRDB := []byte{
+		0x52, 0x45, 0x44, 0x49, 0x53, 0x00,
+		0x00,
+		0xFF,
+	}
+
+	fmt.Fprintf(conn, "$%d\r\n", len(emptyRDB))
+
+	conn.Write(emptyRDB)
+}
