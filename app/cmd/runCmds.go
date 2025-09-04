@@ -152,7 +152,7 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 
 	case "REPLCONF":
 
-		fmt.Println("listening portyn" , cmdParser)
+		fmt.Println("listening portyn" , cmdParser[1])
 		subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
 
 		switch subcmd {
