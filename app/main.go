@@ -90,8 +90,6 @@ func handleConnection(conn net.Conn) {
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
-		fmt.Println(cmd)
-
 		writeCommands := map[string]bool{
 			"SET":  true,
 			"DEL":  true,
@@ -137,7 +135,6 @@ func handleConnection(conn net.Conn) {
 			} else {
 				runCmds(conn, cmdParser)
 				if writeCommands[cmd] {
-
 					propagateToReplicas(interfaceSliceToStringSlice(cmdParser))
 				}
 			}
@@ -413,7 +410,11 @@ func sendPSYNC(conn net.Conn) {
 }
 
 func propagateToReplicas(cmd []string) {
+	fmt.Println(cmd, "propogation")
+
 	for _, r := range replicas {
+
+		fmt.Println(r, "propogation")
 
 		resp := encodeAsRESPArray(cmd)
 
@@ -442,6 +443,5 @@ func interfaceSliceToStringSlice(cmd []interface{}) []string {
 		}
 	}
 
-	fmt.Println(strCmd)
 	return strCmd
 }
