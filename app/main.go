@@ -346,7 +346,7 @@ func ParseRESP(raw string) []interface{} {
 		}
 	}
 
-	fmt.Println(cmd)
+	fmt.Println(cmd , cmd)
 	return cmd
 
 
