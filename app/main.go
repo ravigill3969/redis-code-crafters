@@ -339,6 +339,9 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 
 	// ---- Stage 2: Send REPLCONF commands ----
 	sendReplConf(conn, replicaPort)
+
+	// Stage 3: PSYNC
+	sendPSYNC(conn)
 }
 
 func sendReplConf(conn net.Conn, replicaPort string) {
@@ -372,4 +375,18 @@ func sendReplConf(conn net.Conn, replicaPort string) {
 	}
 
 	log.Println("Replica sent both REPLCONF commands")
+}
+
+func sendPSYNC(conn net.Conn) {
+	psync := "*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"
+	_, err := conn.Write([]byte(psync))
+	if err != nil {
+		log.Fatalf("Failed to send PSYNC: %v", err)
+	}
+
+	// Optional: read master response
+	buf := make([]byte, 1024)
+	n, _ := conn.Read(buf)
+	resp := string(buf[:n])
+	log.Println("Received PSYNC response from master:", resp)
 }
