@@ -16,16 +16,21 @@ func INFO(conn net.Conn, cmd []interface{}) {
 		}
 	}
 
-	master_replid := "master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
-	master_repl_offset := "master_repl_offset:0"
+	masterReplId := "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
+	masterReplOffset := "0"
 
 	r := "role:" + role
 
+	// Build plain INFO replication body
 	response := r + "\r\n" +
-		"master_replid:" + master_replid + "\r\n" +
-		"master_repl_offset:" + master_repl_offset + "\r\n"
+		"master_replid:" + masterReplId + "\r\n" +
+		"master_repl_offset:" + masterReplOffset + "\r\n"
 
-	fmt.Fprint(conn, response)
+	// Wrap in RESP Bulk String: $<len>\r\n<response>\r\n
+	bulk := fmt.Sprintf("$%d\r\n%s", len(response), response)
+
+	fmt.Fprint(conn, bulk)
+
 }
 
 func NewBulkString(msg string) string {
