@@ -161,6 +161,5 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 
 	default:
 		conn.Write([]byte("-ERR unknown command\r\n"))
-
 	}
 }
