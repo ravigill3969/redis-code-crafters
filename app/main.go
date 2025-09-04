@@ -432,6 +432,7 @@ func propagateToReplicas(cmd []string) {
 	}
 }
 
+
 func encodeAsRESPArray(cmd []string) string {
 	s := fmt.Sprintf("*%d\r\n", len(cmd))
 	for _, arg := range cmd {
