@@ -90,8 +90,10 @@ func handleConnection(conn net.Conn) {
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
+		isReplica := false
 		if cmd == "REPLCONF" {
 			mu.Lock()
+			isReplica = true
 			replicas = append(replicas, conn)
 			mu.Unlock()
 			conn.Write([]byte("+OK\r\n"))
@@ -133,7 +135,7 @@ func handleConnection(conn net.Conn) {
 					"INCR": true,
 					"DECR": true,
 				}
-				if writeCommands[strings.ToUpper(strCmd[0])] {
+				if writeCommands[strings.ToUpper(strCmd[0])] && !isReplica {
 					propagateToReplicas(strCmd) // propagate only after execution
 				}
 			}
