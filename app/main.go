@@ -263,6 +263,9 @@ func runCmds(conn net.Conn, cmdParser []interface{}) {
 	case "INFO":
 		handlers.INFO(conn, cmdParser)
 
+	case "REPLCONF":
+		fmt.Fprintf(conn, "+OK\r\n")
+
 	default:
 		conn.Write([]byte("-ERR unknown command\r\n"))
 
