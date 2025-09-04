@@ -137,7 +137,7 @@ func handleConnection(conn net.Conn) {
 			} else {
 				runCmds(conn, cmdParser)
 				if writeCommands[cmd] {
-					fmt.Println("propegation", cmd)
+
 					propagateToReplicas(interfaceSliceToStringSlice(cmdParser))
 				}
 			}
@@ -441,5 +441,7 @@ func interfaceSliceToStringSlice(cmd []interface{}) []string {
 			strCmd[i] = fmt.Sprintf("%v", arg) // fallback
 		}
 	}
+
+	fmt.Println(strCmd)
 	return strCmd
 }
