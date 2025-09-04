@@ -90,13 +90,6 @@ func handleConnection(conn net.Conn) {
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
-		writeCommands := map[string]bool{
-			"SET":  true,
-			"DEL":  true,
-			"INCR": true,
-			"DECR": true,
-		}
-
 		switch cmd {
 		case "MULTI":
 			inTx = true
@@ -125,9 +118,15 @@ func handleConnection(conn net.Conn) {
 
 			for _, q := range txQueue {
 				runCmds(conn, q)
-				if writeCommands[cmd] {
-					strCmd := interfaceSliceToStringSlice(cmdParser)
-					propagateToReplicas(strCmd)
+				strCmd := interfaceSliceToStringSlice(q)
+				writeCommands := map[string]bool{
+					"SET":  true,
+					"DEL":  true,
+					"INCR": true,
+					"DECR": true,
+				}
+				if writeCommands[strings.ToUpper(strCmd[0])] {
+					propagateToReplicas(strCmd) // propagate only after execution
 				}
 			}
 			txQueue = nil
@@ -138,6 +137,12 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("+QUEUED\r\n"))
 			} else {
 				runCmds(conn, cmdParser)
+				writeCommands := map[string]bool{
+					"SET":  true,
+					"DEL":  true,
+					"INCR": true,
+					"DECR": true,
+				}
 				if writeCommands[cmd] {
 					strCmd := interfaceSliceToStringSlice(cmdParser)
 					propagateToReplicas(strCmd)
@@ -415,12 +420,13 @@ func sendPSYNC(conn net.Conn) {
 }
 
 func propagateToReplicas(cmd []string) {
-	fmt.Println(replicas)
+	fmt.Println("Propagating to replicas:", cmd, "Total replicas:", len(replicas))
 	for _, r := range replicas {
-
 		resp := encodeAsRESPArray(cmd)
-
-		r.Write([]byte(resp))
+		_, err := r.Write([]byte(resp))
+		if err != nil {
+			log.Println("Failed to propagate to replica:", err)
+		}
 	}
 }
 
