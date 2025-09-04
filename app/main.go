@@ -338,8 +338,6 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 	fmt.Println(conn, replicas)
 	replicas = append(replicas, conn)
 
-	defer conn.Close()
-
 	// ---- Stage 1: Send PING ----
 	ping := "*1\r\n$4\r\nPING\r\n"
 	_, err = conn.Write([]byte(ping))
