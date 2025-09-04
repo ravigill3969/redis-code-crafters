@@ -142,9 +142,7 @@ func handleConnection(conn net.Conn) {
 				txQueue = append(txQueue, cmdParser)
 				conn.Write([]byte("+QUEUED\r\n"))
 			} else {
-				// Execute the command first
 
-				// Then propagate if it's a write command
 				writeCommands := map[string]bool{
 					"SET":  true,
 					"DEL":  true,
