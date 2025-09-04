@@ -15,9 +15,7 @@ func SET(cmdParser []interface{}, conn net.Conn) {
 
 	key := fmt.Sprintf("%v", cmdParser[0])
 	value := cmdParser[1]
-	fmt.Println("ongoing")
 
-	fmt.Println(cmdParser...)
 	mu.Lock()
 	redisKeyValueStore[key] = value
 

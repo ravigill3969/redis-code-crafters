@@ -48,7 +48,6 @@ func RPUSH(cmd []interface{}) (int, error) {
 }
 
 func LRANGE(cmd []interface{}) ([]string, error) {
-	fmt.Println("hit")
 	if len(cmd) < 3 {
 		return nil, fmt.Errorf("wrong number of arguments")
 	}
@@ -81,7 +80,6 @@ func LRANGE(cmd []interface{}) ([]string, error) {
 		end = length - 1
 	}
 
-	fmt.Println(list)
 	return list[start : end+1], nil
 }
 
@@ -90,7 +88,6 @@ func LPUSH(cmd []interface{}) (int, error) {
 		return 0, fmt.Errorf("wrong number of arguments")
 	}
 
-	fmt.Println(cmd)
 
 	key := fmt.Sprintf("%v", cmd[0])
 	values := cmd[1:]
@@ -140,10 +137,8 @@ func LPOP(cmd []interface{}) ([]string, bool) {
 		loop = len(list)
 	}
 
-	fmt.Println()
-
 	res := list[:loop]
-	fmt.Println(res)
+
 	RedisListStore[key] = list[loop:]
 	return res, true
 }
@@ -174,12 +169,10 @@ func BLPOP(cmd []interface{}) (string, bool) {
 
 	if timeoutSec == 0 {
 		val := <-ch
-		fmt.Println(val, "inside blpop")
 		return val, true
 	} else {
 		select {
 		case val := <-ch:
-			fmt.Println(val, "inside blpop time lmit")
 			return val, true
 		case <-time.After(time.Duration(timeoutSec * float64(time.Second))):
 			return "", false

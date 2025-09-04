@@ -153,7 +153,6 @@ func handleConnection(conn net.Conn) {
 				}
 				if writeCommands[cmd] {
 					strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
-					fmt.Println("Executing and propagating:", strCmd)
 					propagateToReplicas(strCmd)
 				} else {
 					cmds.RunCmds(conn, cmdParser)

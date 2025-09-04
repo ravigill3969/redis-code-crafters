@@ -15,7 +15,7 @@ var redisKeyExpiryTime = make(map[string]time.Time)
 var redisKeyTypeStore = make(map[string]string)
 
 func RunCmds(conn net.Conn, cmdParser []interface{}) {
-	fmt.Println(cmdParser...)
+
 	switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) {
 	case "PING":
 		conn.Write([]byte("+PONG\r\n"))
@@ -28,7 +28,6 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 		}
 
 	case "SET":
-		fmt.Println("setting")
 		if len(cmdParser) < 2 {
 			conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 
@@ -43,8 +42,6 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 		if len(cmdParser) < 2 {
 			conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 		}
-
-		fmt.Println(cmdParser...)
 
 		handlers.GET(cmdParser[1:], conn)
 
@@ -116,7 +113,6 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 		key := fmt.Sprintf("%s", cmdParser[1])
 		val, ok := handlers.BLPOP(cmdParser[1:])
 
-		fmt.Println(val)
 		if ok {
 			fmt.Fprintf(conn, "*2\r\n")
 			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(key), key)
@@ -152,6 +148,7 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 
 	case "REPLCONF":
 		subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
+		fmt.Println("I am not unknowx")
 		switch subcmd {
 		case "LISTENING-PORT":
 			conn.Write([]byte("+OK\r\n"))

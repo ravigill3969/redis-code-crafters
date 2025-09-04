@@ -82,10 +82,6 @@ func XADD(cmd []interface{}) (string, error) {
 
 		ch := chans[0]
 
-		if ch.seq == "$" {
-			fmt.Println("yses")
-		}
-
 		if xreadIsValidId(ch.seq, id) {
 
 			go func() {
@@ -186,7 +182,7 @@ func handleTimeAndSeq(key string) string {
 }
 
 func XRANGE(conn net.Conn, cmd []interface{}) {
-	fmt.Println(cmd)
+
 	streamKey := fmt.Sprintf("%s", cmd[0])
 	startSeq := fmt.Sprintf("%s", cmd[1])
 	endSeq := fmt.Sprintf("%s", cmd[2])
@@ -220,9 +216,8 @@ func XRANGE(conn net.Conn, cmd []interface{}) {
 		s.Write([]byte(fmt.Sprintf("*%d\r\n", len(c.Fields)*2)))
 
 		for key := range c.Fields {
-			fmt.Println(key)
 			val := c.Fields[key]
-			fmt.Println(val)
+
 			s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(key), key))
 			s.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
 		}
@@ -359,7 +354,6 @@ func XREAD(conn net.Conn, cmdOrg []interface{}) {
 
 func handleBlockStream(conn net.Conn, cmd []interface{}, blockMs int) {
 	streamKey := fmt.Sprintf("%s", cmd[0])
-	fmt.Println(cmd)
 	seq := fmt.Sprintf("%s", cmd[1])
 
 	ch := make(chan StreamEntry, 1)
