@@ -182,6 +182,9 @@ func runCmds(conn net.Conn, cmdParser []interface{}) {
 			conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 
 		}
+
+		fmt.Println(cmdParser...)
+
 		key := fmt.Sprintf("%v", cmdParser[1])
 
 		redisKeyTypeStore[key] = "string"
@@ -191,6 +194,8 @@ func runCmds(conn net.Conn, cmdParser []interface{}) {
 		if len(cmdParser) < 2 {
 			conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 		}
+
+		fmt.Println(cmdParser...)
 
 		handlers.GET(cmdParser[1:], conn)
 
