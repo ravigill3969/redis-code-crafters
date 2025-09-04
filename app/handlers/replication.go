@@ -30,20 +30,7 @@ func INFO(conn net.Conn, cmd []interface{}) {
 }
 
 func PSYNC(conn net.Conn) {
-	// Send FULLRESYNC line
 	conn.Write([]byte("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n"))
-
-	// RDB content as binary
-	RDBcontent, _ := hex.DecodeString(
-		"524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2",
-	)
-
-	// Write RESP bulk string header
-	fmt.Fprintf(conn, "$%d\r\n", len(RDBcontent))
-
-	// Write raw RDB bytes (don’t cast to string)
-	conn.Write(RDBcontent)
-
-	// Write trailing CRLF
-	conn.Write([]byte("\r\n"))
+	RDBcontent, _ := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
+	conn.Write([]byte(fmt.Sprintf("$%v\r\n%v", len(string(RDBcontent)), string(RDBcontent))))
 }
