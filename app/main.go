@@ -97,11 +97,6 @@ func handleConnection(conn net.Conn) {
 			"DECR": true,
 		}
 
-		if writeCommands[cmd] {
-			strCmd := interfaceSliceToStringSlice(cmdParser)
-			propagateToReplicas(strCmd)
-		}
-
 		switch cmd {
 		case "MULTI":
 			inTx = true
@@ -339,6 +334,8 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 	if err != nil {
 		log.Fatalf("Failed to connect to master: %v", err)
 	}
+	replicas = append(replicas, conn)
+
 	defer conn.Close()
 
 	// ---- Stage 1: Send PING ----
@@ -364,7 +361,6 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 	// Stage 3: PSYNC
 	sendPSYNC(conn)
 
-	replicas = append(replicas, conn)
 }
 
 func sendReplConf(conn net.Conn, replicaPort string) {
@@ -407,7 +403,6 @@ func sendPSYNC(conn net.Conn) {
 		log.Fatalf("Failed to send PSYNC: %v", err)
 	}
 
-	// Optional: read master response
 	buf := make([]byte, 1024)
 	n, _ := conn.Read(buf)
 	resp := string(buf[:n])
@@ -432,7 +427,6 @@ func encodeAsRESPArray(cmd []string) string {
 func interfaceSliceToStringSlice(cmd []interface{}) []string {
 	strCmd := make([]string, len(cmd))
 	for i, arg := range cmd {
-		// assuming each arg is []byte (as it comes from the RESP parser)
 		switch v := arg.(type) {
 		case string:
 			strCmd[i] = v
