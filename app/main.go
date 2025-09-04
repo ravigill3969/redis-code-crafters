@@ -59,7 +59,6 @@ func main() {
 		}
 		defer conn.Close()
 
-		// Send the first handshake PING
 		ping := "*1\r\n$4\r\nPING\r\n"
 		_, err = conn.Write([]byte(ping))
 		if err != nil {
@@ -67,6 +66,9 @@ func main() {
 		}
 
 		log.Println("Replica connected to master and sent PING")
+		conn.Write([]byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n%d\r\n", replicaPort)))
+		time.Sleep(1 * time.Second)
+		conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"))
 	}
 
 	for {
