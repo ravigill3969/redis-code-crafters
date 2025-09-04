@@ -413,7 +413,10 @@ func sendPSYNC(conn net.Conn) {
 
 func propagateToReplicas(cmd []string) {
 	for _, r := range replicas {
+		fmt.Fprintln(r)
 		resp := encodeAsRESPArray(cmd)
+
+		fmt.Println(resp)
 		r.Write([]byte(resp))
 	}
 }
