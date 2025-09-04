@@ -220,10 +220,10 @@ func sendPSYNC(conn net.Conn) {
 		log.Fatalf("Failed to send PSYNC: %v", err)
 	}
 
-	// buf := make([]byte, 1024)
-	// n, _ := conn.Read(buf)
-	// resp := string(buf[:n])
-	// log.Println("Received PSYNC response from master:", resp)
+	buf := make([]byte, 1024)
+	n, _ := conn.Read(buf)
+	resp := string(buf[:n])
+	log.Println("Received PSYNC response from master:", resp)
 }
 
 func propagateToReplicas(cmd []string) {
