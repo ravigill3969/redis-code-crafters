@@ -249,13 +249,13 @@ func readFromMaster(conn net.Conn) {
 			return
 		}
 
-		fmt.Println("recevied cmds")
-
+		
 		raw := string(buffer[:n])
 		cmdParser := utils.ParseRESP(raw)
 		if len(cmdParser) == 0 {
 			continue
 		}
+		fmt.Println("recevied cmds insode read from amster", cmdParser )
 
 		cmds.RunCmds(conn, cmdParser)
 	}
