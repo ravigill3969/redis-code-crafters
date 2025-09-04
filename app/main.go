@@ -76,6 +76,7 @@ func handleConnection(conn net.Conn) {
 
 	var inTx bool
 	var txQueue [][]interface{}
+	isReplica := false
 
 	for {
 		n, err := conn.Read(buffer)
@@ -90,7 +91,6 @@ func handleConnection(conn net.Conn) {
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
-		isReplica := false
 		if cmd == "REPLCONF" {
 			mu.Lock()
 			isReplica = true
