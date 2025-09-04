@@ -157,7 +157,7 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 		case "LISTENING-PORT", "CAPA":
 			conn.Write([]byte("+OK\r\n"))
 		case "GETACK":
-			_, err := conn.Write([]byte("*3\r\n$8\r\nreplconf\r\n$6\r\ngetack\r\n$1\r\n*\r\n"))
+			_, err := conn.Write([]byte("+OK\r\n"))
 			fmt.Println(err)
 
 		}
