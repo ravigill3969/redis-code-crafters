@@ -146,7 +146,7 @@ func handleConnection(conn net.Conn) {
 			} else {
 				// Execute the command first
 				runCmds(conn, cmdParser)
-
+				
 				// Then propagate if it's a write command
 				writeCommands := map[string]bool{
 					"SET":  true,
@@ -422,11 +422,14 @@ func propagateToReplicas(cmd []string) {
 	replicasCopy := make([]net.Conn, len(replicas))
 	copy(replicasCopy, replicas)
 	mu.RUnlock()
-
+	
 	fmt.Printf("Propagating to %d replicas: %v\n", len(replicasCopy), cmd)
-
+	
 	respCmd := encodeAsRESPArray(cmd)
+	fmt.Printf("Encoded RESP command: %q\n", respCmd)
+	
 	for i, r := range replicasCopy {
+		fmt.Printf("Sending to replica %d: %v\n", i, cmd)
 		_, err := r.Write([]byte(respCmd))
 		if err != nil {
 			log.Printf("Failed to propagate to replica %d: %v", i, err)
@@ -439,6 +442,8 @@ func propagateToReplicas(cmd []string) {
 				}
 			}
 			mu.Unlock()
+		} else {
+			fmt.Printf("Successfully sent to replica %d\n", i)
 		}
 	}
 }
