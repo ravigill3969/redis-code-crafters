@@ -250,10 +250,12 @@ func readFromMaster(conn net.Conn) {
 		}
 
 		raw := string(buffer[:n])
+		fmt.Println(raw)
 		cmdParser := utils.ParseRESP(raw)
 		if len(cmdParser) == 0 {
 			continue
 		}
+
 		fmt.Println("recevied cmds insode read from amster", cmdParser)
 
 		if handleReplicaCmd(cmdParser, conn) {
