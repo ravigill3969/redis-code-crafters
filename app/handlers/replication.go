@@ -39,7 +39,6 @@ func PSYNC(conn net.Conn) {
 	}
 
 	time.Sleep(1000)
-	fmt.Fprintf(conn, "$%d\r\n", len(emptyRDB))
+	fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(emptyRDB), emptyRDB)
 
-	conn.Write(emptyRDB)
 }
