@@ -178,15 +178,15 @@ func runCmds(conn net.Conn, cmdParser []interface{}) {
 		}
 
 	case "SET":
+		fmt.Println("setting")
 		if len(cmdParser) < 2 {
 			conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 
 		}
 
-		fmt.Println(cmdParser...)
-
+		
 		key := fmt.Sprintf("%v", cmdParser[1])
-
+		
 		redisKeyTypeStore[key] = "string"
 		handlers.SET(cmdParser[1:], conn)
 
