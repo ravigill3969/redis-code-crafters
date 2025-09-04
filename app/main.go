@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"strconv"
@@ -39,7 +40,34 @@ func main() {
 		fmt.Println("Failed to bind port:", err)
 		return
 	}
-	fmt.Printf("Server listening on %s", PORT)
+
+	var replicaHost, replicaPort string
+	for i := 0; i < len(os.Args); i++ {
+		if os.Args[i] == "--replicaof" && i+1 < len(os.Args) {
+			parts := strings.Split(os.Args[i+1], " ")
+			if len(parts) == 2 {
+				replicaHost = parts[0]
+				replicaPort = parts[1]
+			}
+		}
+	}
+
+	if replicaHost != "" && replicaPort != "" {
+		conn, err := net.Dial("tcp", net.JoinHostPort(replicaHost, replicaPort))
+		if err != nil {
+			log.Fatalf("Failed to connect to master: %v", err)
+		}
+		defer conn.Close()
+
+		// Send the first handshake PING
+		ping := "*1\r\n$4\r\nPING\r\n"
+		_, err = conn.Write([]byte(ping))
+		if err != nil {
+			log.Fatalf("Failed to send PING: %v", err)
+		}
+
+		log.Println("Replica connected to master and sent PING")
+	}
 
 	for {
 		conn, err := l.Accept()
