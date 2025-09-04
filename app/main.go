@@ -90,6 +90,8 @@ func handleConnection(conn net.Conn) {
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
+		fmt.Println(cmd)
+
 		writeCommands := map[string]bool{
 			"SET":  true,
 			"DEL":  true,
