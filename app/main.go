@@ -146,6 +146,7 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("+QUEUED\r\n"))
 			} else {
 				runCmds(conn, cmdParser)
+				fmt.Println("%+v", conn)
 				writeCommands := map[string]bool{
 					"SET":  true,
 					"DEL":  true,
@@ -365,18 +366,6 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 
 	sendReplConf(conn, replicaPort)
 	sendPSYNC(conn)
-}
-
-func removeReplica(deadConn net.Conn) {
-	mu.Lock()
-	defer mu.Unlock()
-	for i, r := range replicas {
-		if r == deadConn {
-			replicas = append(replicas[:i], replicas[i+1:]...)
-			log.Println("Removed dead replica. Total replicas now:", len(replicas))
-			return
-		}
-	}
 }
 
 func sendReplConf(conn net.Conn, replicaPort string) {
