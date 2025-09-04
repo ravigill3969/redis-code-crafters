@@ -65,7 +65,7 @@ func main() {
 }
 
 func handleConnection(conn net.Conn) {
-
+	defer conn.Close()
 	buffer := make([]byte, 4096)
 
 	var inTx bool
@@ -87,7 +87,7 @@ func handleConnection(conn net.Conn) {
 
 		if cmd == "REPLCONF" {
 			mu.Lock()
-			fmt.Println("yes")
+
 			isReplica = true
 			replicas[conn] = true
 			mu.Unlock()
@@ -96,6 +96,14 @@ func handleConnection(conn net.Conn) {
 		}
 
 		switch cmd {
+		case "REPLCONF":
+			mu.Lock()
+
+			isReplica = true
+			replicas[conn] = true
+			mu.Unlock()
+			conn.Write([]byte("+OK\r\n"))
+
 		case "MULTI":
 			inTx = true
 			txQueue = [][]any{}
@@ -155,7 +163,6 @@ func handleConnection(conn net.Conn) {
 					propagateToReplicas(strCmd)
 				} else {
 					cmds.RunCmds(conn, cmdParser)
-
 				}
 			}
 		}
