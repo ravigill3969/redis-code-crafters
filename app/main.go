@@ -21,8 +21,7 @@ var redisKeyTypeStore = make(map[string]string)
 var isSlave = false
 
 var mu sync.RWMutex
-
-var replicas []net.Conn
+var replicas = make(map[net.Conn]bool)
 
 func main() {
 	// Default replica port
@@ -76,7 +75,7 @@ func handleConnection(conn net.Conn) {
 
 	var inTx bool
 	var txQueue [][]interface{}
-	isReplica := false
+	var isReplica bool = false
 
 	for {
 		n, err := conn.Read(buffer)
@@ -94,7 +93,7 @@ func handleConnection(conn net.Conn) {
 		if cmd == "REPLCONF" {
 			mu.Lock()
 			isReplica = true
-			replicas = append(replicas, conn)
+			replicas[conn] = true
 			mu.Unlock()
 			conn.Write([]byte("+OK\r\n"))
 			continue
@@ -418,34 +417,17 @@ func sendPSYNC(conn net.Conn) {
 	resp := string(buf[:n])
 	log.Println("Received PSYNC response from master:", resp)
 }
-
 func propagateToReplicas(cmd []string) {
+	resp := encodeAsRESPArray(cmd)
 	mu.RLock()
-	replicasCopy := make([]net.Conn, len(replicas))
-	copy(replicasCopy, replicas)
-	mu.RUnlock()
-
-	fmt.Printf("Propagating to %d replicas: %v\n", len(replicasCopy), cmd)
-
-	respCmd := encodeAsRESPArray(cmd)
-	fmt.Printf("Encoded RESP command: %q\n", respCmd)
-
-	for i, r := range replicasCopy {
-		fmt.Printf("Sending to replica %d: %v\n", i, cmd)
-		_, err := r.Write([]byte(respCmd))
+	defer mu.RUnlock()
+	fmt.Println("Propagating to replicas:", cmd, "Total replicas:", len(replicas))
+	for r := range replicas {
+		_, err := r.Write([]byte(resp))
 		if err != nil {
-			log.Printf("Failed to propagate to replica %d: %v", i, err)
-			// Remove failed replica
-			mu.Lock()
-			for j, replica := range replicas {
-				if replica == r {
-					replicas = append(replicas[:j], replicas[j+1:]...)
-					break
-				}
-			}
-			mu.Unlock()
+			log.Println("Failed to propagate to replica:", err)
 		} else {
-			fmt.Printf("Successfully sent to replica %d\n", i)
+			fmt.Println("Successfully sent to replica")
 		}
 	}
 }
