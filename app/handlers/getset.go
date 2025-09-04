@@ -23,6 +23,7 @@ func SET(cmdParser []interface{}, conn net.Conn) {
 		ms, _ := strconv.Atoi(fmt.Sprintf("%v", cmdParser[3]))
 		redisKeyExpiryTime[key] = time.Now().Add(time.Duration(ms) * time.Millisecond)
 	}
+	fmt.Println(cmdParser...)
 	mu.Unlock()
 	conn.Write([]byte("+OK\r\n"))
 }
