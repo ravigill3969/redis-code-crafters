@@ -152,18 +152,17 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 
 	case "REPLCONF":
 
-		fmt.Println("listening portyn" , cmdParser[1])
-		subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
-
-		switch subcmd {
+		switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[1])) {
 		case "LISTENING-PORT":
 			conn.Write([]byte("+OK\r\n"))
 
 		case "CAPA":
+			fmt.Println("CAPA")
 			conn.Write([]byte("+OK\r\n"))
-
+			
 		case "GETACK":
 			// This is the new part for this stage
+			fmt.Println("GETACK")
 			conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"))
 		}
 
