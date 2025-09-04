@@ -369,6 +369,7 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 
 	sendReplConf(conn, replicaPort)
 	sendPSYNC(conn)
+	   go readFromMaster(conn)
 }
 
 func sendReplConf(conn net.Conn, replicaPort string) {
@@ -454,4 +455,25 @@ func interfaceSliceToStringSlice(cmd []interface{}) []string {
 	}
 
 	return strCmd
+}
+
+
+func readFromMaster(conn net.Conn) {
+    buffer := make([]byte, 4096)
+    for {
+        n, err := conn.Read(buffer)
+        if err != nil {
+            log.Println("Lost connection to master:", err)
+            return
+        }
+
+        raw := string(buffer[:n])
+        cmdParser := ParseRESP(raw)
+        if len(cmdParser) == 0 {
+            continue
+        }
+
+        // execute locally but DO NOT propagate
+        runCmds(conn, cmdParser)
+    }
 }
