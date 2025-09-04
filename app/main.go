@@ -125,6 +125,10 @@ func handleConnection(conn net.Conn) {
 
 			for _, q := range txQueue {
 				runCmds(conn, q)
+				if writeCommands[cmd] {
+					strCmd := interfaceSliceToStringSlice(cmdParser)
+					propagateToReplicas(strCmd)
+				}
 			}
 			txQueue = nil
 
@@ -135,7 +139,8 @@ func handleConnection(conn net.Conn) {
 			} else {
 				runCmds(conn, cmdParser)
 				if writeCommands[cmd] {
-					propagateToReplicas(interfaceSliceToStringSlice(cmdParser))
+					strCmd := interfaceSliceToStringSlice(cmdParser)
+					propagateToReplicas(strCmd)
 				}
 			}
 		}
