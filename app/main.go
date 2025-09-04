@@ -41,7 +41,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to bind port: %v", err)
 	}
-	defer l.Close()
 
 	// Parse --replicaof argument
 	masterHost, masterPort := "", ""
