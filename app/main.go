@@ -90,8 +90,17 @@ func handleConnection(conn net.Conn) {
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
-		strCmd := interfaceSliceToStringSlice(cmdParser)
-		propagateToReplicas(strCmd)
+		writeCommands := map[string]bool{
+			"SET":  true,
+			"DEL":  true,
+			"INCR": true,
+			"DECR": true,
+		}
+
+		if writeCommands[cmd] {
+			strCmd := interfaceSliceToStringSlice(cmdParser)
+			propagateToReplicas(strCmd)
+		}
 
 		switch cmd {
 		case "MULTI":
@@ -130,6 +139,9 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("+QUEUED\r\n"))
 			} else {
 				runCmds(conn, cmdParser)
+				if writeCommands[cmd] {
+					propagateToReplicas(interfaceSliceToStringSlice(cmdParser))
+				}
 			}
 		}
 	}
@@ -404,8 +416,8 @@ func sendPSYNC(conn net.Conn) {
 
 func propagateToReplicas(cmd []string) {
 	for _, r := range replicas {
-		resp := encodeAsRESPArray(cmd) // convert []string -> RESP array
-		r.Write([]byte(resp))          // no response expected
+		resp := encodeAsRESPArray(cmd)
+		r.Write([]byte(resp))
 	}
 }
 
