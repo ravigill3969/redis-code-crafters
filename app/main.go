@@ -236,7 +236,7 @@ func propagateToReplicas(cmd []string) {
 		if err != nil {
 			log.Println("Failed to propagate to replica:", err)
 		} else {
-			fmt.Println("Successfully sent to replica" )
+			fmt.Println("Successfully sent to replica")
 		}
 	}
 }
@@ -259,31 +259,6 @@ func readFromMaster(conn net.Conn) {
 
 		fmt.Println("recevied cmds insode read from amster", cmdParser)
 
-		if handleReplicaCmd(cmdParser, conn) {
-			continue
-		}
-
 		cmds.RunCmds(conn, cmdParser)
-	}
-}
-
-func handleReplicaCmd(cmdParser []interface{}, conn net.Conn) bool {
-	cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
-	if cmd != "REPLCONF" {
-		return false
-	}
-
-	subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
-	switch subcmd {
-	case "LISTENING-PORT", "CAPA":
-		conn.Write([]byte("+OK\r\n"))
-		return true
-
-	case "GETACK":
-		conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"))
-		return true
-	default:
-		conn.Write([]byte("-ERR unknown REPLCONF subcommand\r\n"))
-		return true
 	}
 }
