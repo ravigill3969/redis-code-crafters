@@ -90,6 +90,15 @@ func handleConnection(conn net.Conn) {
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
+		if cmd == "REPLCONF" {
+			mu.Lock()
+			replicas = append(replicas, conn)
+			mu.Unlock()
+			log.Println("New replica connected. Total replicas:", len(replicas))
+			conn.Write([]byte("+OK\r\n"))
+			continue
+		}
+
 		switch cmd {
 		case "MULTI":
 			inTx = true
@@ -344,47 +353,18 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 	if err != nil {
 		log.Fatalf("Failed to connect to master: %v", err)
 	}
+	defer conn.Close()
 
-	// Store the connection in the replicas slice
-	replicas = append(replicas, conn)
-	log.Println("Connected to master. Total replicas:", len(replicas))
-
-	// Spawn a goroutine to continuously read from the master
-	go func(c net.Conn) {
-		buf := make([]byte, 4096)
-		for {
-			n, err := c.Read(buf)
-			if err != nil {
-				log.Println("Master connection closed or error:", err)
-				removeReplica(c) // Remove dead connection from replicas slice
-				return
-			}
-			// For now, just discard the data
-			_ = buf[:n]
-		}
-	}(conn)
-
-	// ---- Stage 1: Send PING ----
-	ping := "*1\r\n$4\r\nPING\r\n"
-	_, err = conn.Write([]byte(ping))
-	if err != nil {
-		log.Fatalf("Failed to send PING: %v", err)
-	}
-
+	// Send PING
+	conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
 	buf := make([]byte, 1024)
 	n, _ := conn.Read(buf)
 	if string(buf[:n]) != "+PONG\r\n" {
 		log.Fatalf("Expected +PONG, got: %q", string(buf[:n]))
 	}
-	log.Println("Received PONG from master")
 
-	// ---- Stage 2: Send REPLCONF commands ----
 	sendReplConf(conn, replicaPort)
-
-	// ---- Stage 3: Send PSYNC ----
 	sendPSYNC(conn)
-
-	log.Println("Replica handshake completed. Ready to propagate commands.")
 }
 
 func removeReplica(deadConn net.Conn) {
