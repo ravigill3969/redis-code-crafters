@@ -23,75 +23,51 @@ var isSlave = false
 var mu sync.RWMutex
 
 func main() {
-
+	// Default replica port
 	PORT := "6379"
 
+	// Parse command-line args for --port
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--port" && i+1 < len(os.Args) {
 			PORT = os.Args[i+1]
-			i++ // skip next argument
+			i++
 		}
 	}
 
+	// Listen for client connections
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", PORT))
-	// l, err := net.Listen("tcp", "127.0.0.1:6700")
-
 	if err != nil {
-		fmt.Println("Failed to bind port:", err)
-		return
+		log.Fatalf("Failed to bind port: %v", err)
 	}
+	defer l.Close()
 
-	var replicaHost, replicaPort string
+	// Parse --replicaof argument
+	masterHost, masterPort := "", ""
 	for i := 0; i < len(os.Args); i++ {
 		if os.Args[i] == "--replicaof" && i+1 < len(os.Args) {
 			parts := strings.Split(os.Args[i+1], " ")
 			if len(parts) == 2 {
-				replicaHost = parts[0]
-				replicaPort = parts[1]
+				masterHost = parts[0]
+				masterPort = parts[1]
 			}
 		}
 	}
 
-	if replicaHost != "" && replicaPort != "" {
-		conn, err := net.Dial("tcp", net.JoinHostPort(replicaHost, PORT))
-		if err != nil {
-			log.Fatalf("Failed to connect to master: %v", err)
-		}
-		defer conn.Close()
-
-		ping := "*1\r\n$4\r\nPING\r\n"
-		_, err = conn.Write([]byte(ping))
-		if err != nil {
-			log.Fatalf("Failed to send PING: %v", err)
-		}
-
-		log.Println("Replica connected to master and sent PING")
-
-		buf := make([]byte, 1024)
-		n, err := conn.Read(buf)
-		if err != nil {
-			log.Fatalf("Failed to read PONG: %v", err)
-		}
-		pong := string(buf[:n])
-		if pong != "+PONG\r\n" {
-			log.Fatalf("Expected +PONG, got: %s", pong)
-		}
-
-		sendReplConf(conn, PORT)
-
+	// If replica, connect to master and perform handshake
+	if masterHost != "" && masterPort != "" {
+		connectToMaster(masterHost, masterPort, PORT)
 	}
 
+	// Accept client connections (for GET/SET/etc.)
 	for {
 		conn, err := l.Accept()
-
 		if err != nil {
-			fmt.Println("Error accepting connection:", err)
+			log.Println("Error accepting connection:", err)
 			continue
 		}
 		go handleConnection(conn)
 	}
 }
-
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	buffer := make([]byte, 4096)
@@ -337,25 +313,63 @@ func ParseRESP(raw string) []interface{} {
 	return cmd
 }
 
-func sendReplConf(conn net.Conn, replicaPort string) {
+func connectToMaster(masterHost, masterPort, replicaPort string) {
+	conn, err := net.Dial("tcp", net.JoinHostPort(masterHost, masterPort))
+	if err != nil {
+		log.Fatalf("Failed to connect to master: %v", err)
+	}
+	defer conn.Close()
 
-	listeningPort := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$%d\r\n%s\r\n",
-		len(replicaPort), replicaPort)
-	_, err := conn.Write([]byte(listeningPort))
+	// ---- Stage 1: Send PING ----
+	ping := "*1\r\n$4\r\nPING\r\n"
+	_, err = conn.Write([]byte(ping))
+	if err != nil {
+		log.Fatalf("Failed to send PING: %v", err)
+	}
+
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		log.Fatalf("Failed to read PONG: %v", err)
+	}
+	if string(buf[:n]) != "+PONG\r\n" {
+		log.Fatalf("Expected +PONG, got: %q", string(buf[:n]))
+	}
+	log.Println("Received PONG from master")
+
+	// ---- Stage 2: Send REPLCONF commands ----
+	sendReplConf(conn, replicaPort)
+}
+
+func sendReplConf(conn net.Conn, replicaPort string) {
+	buf := make([]byte, 1024)
+
+	// 1. REPLCONF listening-port <PORT>
+	replConfListening := fmt.Sprintf(
+		"*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$%d\r\n%s\r\n",
+		len(replicaPort), replicaPort,
+	)
+	_, err := conn.Write([]byte(replConfListening))
 	if err != nil {
 		log.Fatalf("Failed to send REPLCONF listening-port: %v", err)
 	}
 
-	buf := make([]byte, 1024)
-	_, _ = conn.Read(buf)
+	n, _ := conn.Read(buf)
+	if string(buf[:n]) != "+OK\r\n" {
+		log.Fatalf("Expected +OK after listening-port, got: %q", string(buf[:n]))
+	}
 
+	// 2. REPLCONF capa psync2
 	replCapa := "*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"
 	_, err = conn.Write([]byte(replCapa))
 	if err != nil {
 		log.Fatalf("Failed to send REPLCONF capa: %v", err)
 	}
-	_, _ = conn.Read(buf)
+
+	n, _ = conn.Read(buf)
+	if string(buf[:n]) != "+OK\r\n" {
+		log.Fatalf("Expected +OK after capa, got: %q", string(buf[:n]))
+	}
 
 	log.Println("Replica sent both REPLCONF commands")
-
 }
