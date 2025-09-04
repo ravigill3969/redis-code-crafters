@@ -21,7 +21,7 @@ var RedisListStore = map[string][]string{}
 
 func RPUSH(cmd []interface{}) (int, error) {
 
-	fmt.Println(cmd...)
+	fmt.Println(cmd, "cmds")
 
 	key := fmt.Sprintf("%v", cmd[0])
 	values := cmd[1:]
