@@ -121,6 +121,7 @@ func handleConnection(conn net.Conn) {
 			conn.Write([]byte("*" + strconv.Itoa(len(txQueue)) + "\r\n"))
 
 			for _, q := range txQueue {
+				fmt.Println("here too")
 				cmds.RunCmds(conn, q)
 				strCmd := utils.InterfaceSliceToStringSlice(q)
 				writeCommands := map[string]bool{
@@ -255,7 +256,7 @@ func readFromMaster(conn net.Conn) {
 			continue
 		}
 
-		
+		fmt.Println("here")
 
 		cmdName := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 		if cmdName == "REPLCONF" {
