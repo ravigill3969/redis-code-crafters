@@ -151,7 +151,7 @@ func handleConnection(conn net.Conn) {
 					"INCR": true,
 					"DECR": true,
 				}
-				if writeCommands[cmd] {
+				if writeCommands[cmd] && !isReplica {
 					strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
 					propagateToReplicas(strCmd)
 				} else {
@@ -250,6 +250,8 @@ func readFromMaster(conn net.Conn) {
 			log.Println("Lost connection to master:", err)
 			return
 		}
+
+		fmt.Println("recevied cmds")
 
 		raw := string(buffer[:n])
 		cmdParser := utils.ParseRESP(raw)

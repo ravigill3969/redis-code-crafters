@@ -157,7 +157,7 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 		case "GETACK":
 			_, err := conn.Write([]byte("*3\r\n$8\r\nreplconf\r\n$6\r\ngetack\r\n$1\r\n*\r\n"))
 			if err != nil {
-				fmt.Println("Failed to send ACK:", err)
+				fmt.Println("Failed to send ACK:")
 			} else {
 				fmt.Println("Sent REPLCONF ACK 0 to master")
 			}
