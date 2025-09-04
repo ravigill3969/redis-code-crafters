@@ -111,6 +111,7 @@ func LPUSH(cmd []interface{}) (int, error) {
 
 }
 
+
 func LLEN(cmd []interface{}) int {
 	key := cmd[0].(string)
 
