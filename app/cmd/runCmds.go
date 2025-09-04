@@ -15,6 +15,7 @@ var redisKeyExpiryTime = make(map[string]time.Time)
 var redisKeyTypeStore = make(map[string]string)
 
 func RunCmds(conn net.Conn, cmdParser []interface{}) {
+	fmt.Println(cmdParser...)
 	switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) {
 	case "PING":
 		conn.Write([]byte("+PONG\r\n"))
