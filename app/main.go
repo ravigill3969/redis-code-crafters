@@ -121,8 +121,6 @@ func handleConnection(conn net.Conn) {
 			conn.Write([]byte("*" + strconv.Itoa(len(txQueue)) + "\r\n"))
 
 			for _, q := range txQueue {
-				fmt.Println("here too")
-				cmds.RunCmds(conn, q)
 				strCmd := utils.InterfaceSliceToStringSlice(q)
 				writeCommands := map[string]bool{
 					"SET":  true,
@@ -132,6 +130,9 @@ func handleConnection(conn net.Conn) {
 				}
 				if writeCommands[strings.ToUpper(strCmd[0])] && !isReplica {
 					propagateToReplicas(strCmd) // propagate only after execution
+				} else {
+					cmds.RunCmds(conn, q)
+
 				}
 			}
 			txQueue = nil
@@ -142,7 +143,6 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("+QUEUED\r\n"))
 			} else {
 				// Execute the command first
-				cmds.RunCmds(conn, cmdParser)
 
 				// Then propagate if it's a write command
 				writeCommands := map[string]bool{
@@ -155,6 +155,9 @@ func handleConnection(conn net.Conn) {
 					strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
 					fmt.Println("Executing and propagating:", strCmd)
 					propagateToReplicas(strCmd)
+				} else {
+					cmds.RunCmds(conn, cmdParser)
+
 				}
 			}
 		}
@@ -230,7 +233,6 @@ func propagateToReplicas(cmd []string) {
 	resp := utils.EncodeAsRESPArray(cmd)
 	mu.RLock()
 	defer mu.RUnlock()
-	fmt.Println("Propagating to replicas:", cmd, "Total replicas:", len(replicas))
 	for r := range replicas {
 		_, err := r.Write([]byte(resp))
 		if err != nil {
@@ -256,20 +258,6 @@ func readFromMaster(conn net.Conn) {
 			continue
 		}
 
-		fmt.Println("here")
-
-		cmdName := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
-		if cmdName == "REPLCONF" {
-			subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
-			if subcmd == "GETACK" {
-				// reply only to GETACK
-				conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"))
-			} else {
-				// other REPLCONF commands: ignore or handle silently
-			}
-		} else {
-			// regular commands from master: process silently
-			cmds.RunCmds(nil, cmdParser) // pass nil for conn to avoid sending back anything
-		}
+		cmds.RunCmds(conn, cmdParser)
 	}
 }
