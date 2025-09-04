@@ -236,7 +236,7 @@ func propagateToReplicas(cmd []string) {
 		if err != nil {
 			log.Println("Failed to propagate to replica:", err)
 		} else {
-			fmt.Println("Successfully sent to replica")
+			fmt.Println("Successfully sent to replica" )
 		}
 	}
 }
