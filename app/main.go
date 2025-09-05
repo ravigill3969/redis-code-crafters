@@ -83,6 +83,8 @@ func handleConnection(conn net.Conn) {
 			continue
 		}
 
+		fmt.Println(cmdParser...)
+
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
 		if cmd == "REPLCONF" {
