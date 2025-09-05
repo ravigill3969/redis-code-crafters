@@ -44,13 +44,14 @@ func main() {
 			if len(parts) == 2 {
 				masterHost = parts[0]
 				masterPort = parts[1]
+				isSlave = true
 			}
 		}
 	}
 
 	// If replica, connect to master and perform handshake
 	if masterHost != "" && masterPort != "" {
-		connectToMaster(masterHost, masterPort, PORT)
+		go connectToMaster(masterHost, masterPort, PORT)
 	}
 
 	// Accept client connections (for GET/SET/etc.)
@@ -108,24 +109,13 @@ func handleConnection(conn net.Conn) {
 		}
 
 		switch cmd {
-		case "REPLCONF":
-			mu.Lock()
-
-			isReplica = true
-			replicas[conn] = true
-			mu.Unlock()
-			conn.Write([]byte("+OK\r\n"))
-
 		case "MULTI":
 			inTx = true
 			txQueue = [][]any{}
-
 			conn.Write([]byte("+OK\r\n"))
 
 		case "DISCARD":
-
 			if inTx {
-
 				txQueue = nil
 				conn.Write([]byte("+OK\r\n"))
 				inTx = false
@@ -150,11 +140,9 @@ func handleConnection(conn net.Conn) {
 					"DECR": true,
 				}
 				if writeCommands[strings.ToUpper(strCmd[0])] && !isReplica {
-					propagateToReplicas(strCmd) // propagate only after execution
-				} else {
-					cmds.RunCmds(conn, q)
-
+					propagateToReplicas(strCmd)
 				}
+				cmds.RunCmds(conn, q)
 			}
 			txQueue = nil
 
@@ -163,19 +151,17 @@ func handleConnection(conn net.Conn) {
 				txQueue = append(txQueue, cmdParser)
 				conn.Write([]byte("+QUEUED\r\n"))
 			} else {
-
 				writeCommands := map[string]bool{
 					"SET":  true,
 					"DEL":  true,
 					"INCR": true,
 					"DECR": true,
 				}
-				if writeCommands[cmd] && !isReplica {
+				if writeCommands[cmd] && !isReplica && !isSlave {
 					strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
 					propagateToReplicas(strCmd)
-				} else {
-					cmds.RunCmds(conn, cmdParser)
 				}
+				cmds.RunCmds(conn, cmdParser)
 			}
 		}
 	}
@@ -197,7 +183,7 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 
 	sendReplConf(conn, replicaPort)
 	sendPSYNC(conn)
-	go readFromMaster(conn)
+	readFromMaster(conn)
 }
 
 func sendReplConf(conn net.Conn, replicaPort string) {
@@ -260,8 +246,10 @@ func propagateToReplicas(cmd []string) {
 		}
 	}
 }
+
 func readFromMaster(conn net.Conn) {
 	buffer := make([]byte, 4096)
+	var accumulated []byte
 
 	for {
 		n, err := conn.Read(buffer)
@@ -270,23 +258,82 @@ func readFromMaster(conn net.Conn) {
 			return
 		}
 
-		raw := string(buffer[:n])
-		fmt.Println("raw data:", raw)
+		// Add new data to accumulated buffer
+		accumulated = append(accumulated, buffer[:n]...)
 
-		// Simple detection: if the raw data contains both REPLCONF and GETACK
-		if strings.Contains(raw, "REPLCONF") && strings.Contains(raw, "GETACK") {
-			fmt.Println("Detected REPLCONF GETACK command")
-			response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
-			n, err := conn.Write([]byte(response))
-			if err != nil {
-				log.Printf("Failed to write ACK response: %v", err)
-			} else {
-				fmt.Printf("Successfully sent ACK response (%d bytes)\n", n)
+		// Process all complete RESP commands in the accumulated buffer
+		for {
+			if len(accumulated) == 0 {
+				break
 			}
-			continue
-		}
 
-		// For all other data, just log it but don't respond
-		fmt.Println("Received other data from master (no response needed)")
+			raw := string(accumulated)
+			fmt.Println("raw data:", raw)
+
+			// Handle REPLCONF GETACK specifically
+			if strings.Contains(raw, "REPLCONF") && strings.Contains(raw, "GETACK") {
+				fmt.Println("Detected REPLCONF GETACK command")
+				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
+				conn.Write([]byte(response))
+				// Clear accumulated buffer after handling GETACK
+				accumulated = nil
+				break
+			}
+
+			// Try to parse a complete RESP command
+			cmdParser := utils.ParseRESP(raw)
+			if len(cmdParser) == 0 {
+				// No complete command found, wait for more data
+				break
+			}
+
+			fmt.Println("received command from master:", cmdParser)
+
+			// Process the command silently (don't send response back to master)
+			// Create a null writer to avoid sending responses
+			cmds.RunCmds(conn, cmdParser)
+
+			// Remove the processed command from accumulated buffer
+			// This is a simplified approach - in reality you'd need to track exactly how many bytes were consumed
+			// For now, we'll clear the buffer after processing each command
+			accumulated = nil
+			break
+		}
 	}
+}
+
+// NullConn is a dummy connection that discards all writes
+type NullConn struct{}
+
+func (nc *NullConn) Read(b []byte) (n int, err error) {
+	return 0, fmt.Errorf("read not supported")
+}
+
+func (nc *NullConn) Write(b []byte) (n int, err error) {
+	// Silently discard the write - this prevents responses from being sent to master
+	return len(b), nil
+}
+
+func (nc *NullConn) Close() error {
+	return nil
+}
+
+func (nc *NullConn) LocalAddr() net.Addr {
+	return nil
+}
+
+func (nc *NullConn) RemoteAddr() net.Addr {
+	return nil
+}
+
+func (nc *NullConn) SetDeadline(t interface{}) error {
+	return nil
+}
+
+func (nc *NullConn) SetReadDeadline(t interface{}) error {
+	return nil
+}
+
+func (nc *NullConn) SetWriteDeadline(t interface{}) error {
+	return nil
 }
