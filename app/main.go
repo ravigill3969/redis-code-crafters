@@ -271,7 +271,7 @@ func readFromMaster(conn net.Conn) {
 		}
 
 		raw := string(buffer[:n])
-		fmt.Println(raw)
+		fmt.Println("raw" , raw )
 		cmdParser := utils.ParseRESP(raw)
 		if len(cmdParser) == 0 {
 			continue
