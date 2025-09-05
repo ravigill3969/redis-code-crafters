@@ -260,9 +260,9 @@ func propagateToReplicas(cmd []string) {
 		}
 	}
 }
-
 func readFromMaster(conn net.Conn) {
 	buffer := make([]byte, 4096)
+
 	for {
 		n, err := conn.Read(buffer)
 		if err != nil {
@@ -273,19 +273,20 @@ func readFromMaster(conn net.Conn) {
 		raw := string(buffer[:n])
 		fmt.Println("raw data:", raw)
 
-		// Look specifically for REPLCONF GETACK command
+		// Simple detection: if the raw data contains both REPLCONF and GETACK
 		if strings.Contains(raw, "REPLCONF") && strings.Contains(raw, "GETACK") {
-			fmt.Println("Found REPLCONF GETACK, responding with ACK 0")
+			fmt.Println("Detected REPLCONF GETACK command")
 			response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
-			conn.Write([]byte(response))
+			n, err := conn.Write([]byte(response))
+			if err != nil {
+				log.Printf("Failed to write ACK response: %v", err)
+			} else {
+				fmt.Printf("Successfully sent ACK response (%d bytes)\n", n)
+			}
 			continue
 		}
 
-		// Try to parse other RESP commands
-		cmdParser := utils.ParseRESP(raw)
-		if len(cmdParser) > 0 {
-			fmt.Println("parsed other command:", cmdParser)
-			// Process other commands silently (no response to master)
-		}
+		// For all other data, just log it but don't respond
+		fmt.Println("Received other data from master (no response needed)")
 	}
 }
