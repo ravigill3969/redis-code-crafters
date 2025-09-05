@@ -88,12 +88,21 @@ func handleConnection(conn net.Conn) {
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
 		if cmd == "REPLCONF" {
-			mu.Lock()
+			subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
 
-			isReplica = true
-			replicas[conn] = true
-			mu.Unlock()
-			conn.Write([]byte("+OK\r\n"))
+			// If it's the initial REPLCONF (listening-port/capa), mark as replica
+			if subcmd == "LISTENING-PORT" || subcmd == "CAPA" {
+				mu.Lock()
+				isReplica = true
+				replicas[conn] = true
+				mu.Unlock()
+				conn.Write([]byte("+OK\r\n"))
+			} else if subcmd == "GETACK" {
+				// Properly respond to GETACK
+				conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"))
+			} else {
+				conn.Write([]byte("-ERR unknown REPLCONF subcommand\r\n"))
+			}
 			continue
 		}
 
