@@ -260,7 +260,6 @@ func propagateToReplicas(cmd []string) {
 		}
 	}
 }
-
 func readFromMaster(conn net.Conn) {
 	buffer := make([]byte, 4096)
 	for {
@@ -271,14 +270,29 @@ func readFromMaster(conn net.Conn) {
 		}
 
 		raw := string(buffer[:n])
-		fmt.Println("raw" , raw )
+		fmt.Println("raw", raw)
 		cmdParser := utils.ParseRESP(raw)
 		if len(cmdParser) == 0 {
 			continue
 		}
 
-		fmt.Println("recevied cmds insode read from amster", cmdParser)
+		fmt.Println("received cmds inside read from master", cmdParser)
 
-		cmds.RunCmds(conn, cmdParser)
+		// Check if this is a REPLCONF GETACK command
+		if len(cmdParser) >= 2 {
+			cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
+			if cmd == "REPLCONF" {
+				subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
+				if subcmd == "GETACK" {
+					// Respond to GETACK with ACK 0
+					conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"))
+					continue
+				}
+			}
+		}
+
+		// For all other commands, process them silently (no response to master)
+		// We'll create a dummy connection to avoid sending responses
+		cmds.RunCmds(nil, cmdParser)
 	}
 }
