@@ -152,20 +152,6 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 	case "INFO":
 		handlers.INFO(conn, cmdParser)
 
-	case "REPLCONF":
-		fmt.Println(cmdParser, "indoe run replconf")
-
-		fmt.Println("exec now")
-		subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
-		switch subcmd {
-		case "LISTENING-PORT", "CAPA":
-			conn.Write([]byte("+OK\r\n"))
-		case "GETACK":
-			_, err := conn.Write([]byte("+OK\r\n"))
-			fmt.Println(err)
-
-		}
-
 	case "PSYNC":
 		handlers.PSYNC(conn)
 
