@@ -280,30 +280,15 @@ func readFromMaster(conn net.Conn) {
 				break
 			}
 
-			// Try to parse a complete RESP command
 			cmdParser := utils.ParseRESP(raw)
 			if len(cmdParser) == 0 {
-				// No complete command found, wait for more data
 				break
 			}
 
 			fmt.Println("received command from master:", cmdParser)
 
-			// Process the command silently (don't send response back to master)
-			// Create a null writer to avoid sending responses
-			fmt.Println("received command from master:", cmdParser)
-
-			
-					singleCmd := cmdParser[i : i+3] // take 3 elements: SET, key, value
-					cmds.RunCmds(conn, singleCmd)
-				}
-			}
-
-			// Remove the processed command from accumulated buffer
-			// This is a simplified approach - in reality you'd need to track exactly how many bytes were consumed
-			// For now, we'll clear the buffer after processing each command
-			accumulated = nil
-			break
+			cmds.RunCmds(conn, cmdParser)
 		}
+
 	}
 }
