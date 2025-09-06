@@ -253,8 +253,11 @@ func propagateToReplicas(cmd []string) {
 func readFromMaster(conn net.Conn) {
 	fmt.Println("Replica: reading from master")
 	reader := bufio.NewReader(conn)
+	accumulated := []byte{}
+
 	for {
-		line, err := reader.ReadString('\n')
+		buf := make([]byte, 4096)
+		n, err := reader.Read(buf)
 		if err != nil {
 			if err == io.EOF {
 				log.Println("Lost connection to master: EOF")
@@ -265,18 +268,38 @@ func readFromMaster(conn net.Conn) {
 		}
 
 		offsetMu.Lock()
-		replicaOffset += int64(len(line))
+		replicaOffset += int64(n)
 		offsetMu.Unlock()
 
-		cmdParser := utils.ParseRESP(line)
-		if len(cmdParser) == 0 {
-			continue
-		}
+		accumulated = append(accumulated, buf[:n]...)
 
-		for i := 0; i < len(cmdParser); i += 3 {
-			if i+2 < len(cmdParser) {
-				cmds.RunCmds(conn, cmdParser[i:i+3])
+		for {
+			cmdParser, bytesRead := utils.ParseRESPWithOffset(accumulated)
+			if len(cmdParser) == 0 || bytesRead == 0 {
+				break // wait for more data
 			}
+
+			// Check if it's a REPLCONF GETACK from master
+			if len(cmdParser) > 0 {
+				strCmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
+				if strCmd == "REPLCONF" && len(cmdParser) > 1 {
+					subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
+					if subcmd == "GETACK" {
+						offsetMu.Lock()
+						ack := replicaOffset
+						offsetMu.Unlock()
+						resp := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n",
+							len(strconv.FormatInt(ack, 10)), ack)
+						conn.Write([]byte(resp))
+					}
+				} else {
+					// normal commands
+					cmds.RunCmds(conn, cmdParser)
+				}
+			}
+
+			// Remove parsed bytes from buffer
+			accumulated = accumulated[bytesRead:]
 		}
 	}
 }
