@@ -34,7 +34,6 @@ func main() {
 		log.Fatalf("Failed to bind port: %v", err)
 	}
 
-	
 	masterHost, masterPort := "", ""
 	for i := 0; i < len(os.Args); i++ {
 		if os.Args[i] == "--replicaof" && i+1 < len(os.Args) {
@@ -49,7 +48,6 @@ func main() {
 
 	// If replica, connect to master and perform handshake
 	if masterHost != "" && masterPort != "" {
-		fmt.Println("connecting to ater")
 		go connectToMaster(masterHost, masterPort, PORT)
 	}
 
@@ -166,7 +164,6 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 		log.Fatalf("Failed to connect to master: %v", err)
 	}
 
-	// Send PING
 	conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
 	buf := make([]byte, 1024)
 	n, _ := conn.Read(buf)
