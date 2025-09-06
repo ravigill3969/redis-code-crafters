@@ -218,7 +218,6 @@ func sendReplConf(conn net.Conn, replicaPort string) {
 		log.Fatalf("Expected +OK after capa, got: %q", string(buf[:n]))
 	}
 
-	log.Println("Replica sent both REPLCONF commands")
 }
 
 func sendPSYNC(conn net.Conn) {
@@ -231,7 +230,6 @@ func sendPSYNC(conn net.Conn) {
 	buf := make([]byte, 1024)
 	n, _ := conn.Read(buf)
 	_ = string(buf[:n])
-	fmt.Println("end of send psync")
 }
 
 func propagateToReplicas(cmd []string) {
@@ -249,6 +247,7 @@ func propagateToReplicas(cmd []string) {
 }
 
 func readFromMaster(conn net.Conn) {
+	fmt.Println("do sth hell yeahhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
 	buffer := make([]byte, 4096)
 	var accumulated []byte
 
