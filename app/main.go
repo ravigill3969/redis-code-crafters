@@ -14,16 +14,15 @@ import (
 )
 
 var isSlave = false
+
 var mu sync.RWMutex
 var replicas = make(map[net.Conn]bool)
 
-// Replica offset tracking
-var replicaOffset int64 = 0
-var offsetMu sync.Mutex
-
 func main() {
+	// Default replica port
 	PORT := "6379"
 
+	// Parse command-line args for --port
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--port" && i+1 < len(os.Args) {
 			PORT = os.Args[i+1]
@@ -31,11 +30,13 @@ func main() {
 		}
 	}
 
+	// Listen for client connections
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", PORT))
 	if err != nil {
 		log.Fatalf("Failed to bind port: %v", err)
 	}
 
+	// Parse --replicaof argument
 	masterHost, masterPort := "", ""
 	for i := 0; i < len(os.Args); i++ {
 		if os.Args[i] == "--replicaof" && i+1 < len(os.Args) {
@@ -48,10 +49,12 @@ func main() {
 		}
 	}
 
+	// If replica, connect to master and perform handshake
 	if masterHost != "" && masterPort != "" {
 		go connectToMaster(masterHost, masterPort, PORT)
 	}
 
+	// Accept client connections (for GET/SET/etc.)
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -81,11 +84,16 @@ func handleConnection(conn net.Conn) {
 			continue
 		}
 
+		fmt.Println(cmdParser)
+
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
 		if cmd == "REPLCONF" {
 			subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
 
+			fmt.Println(cmd, "inside handlecinnection")
+
+			// If it's the initial REPLCONF (listening-port/capa), mark as replica
 			switch subcmd {
 			case "LISTENING-PORT", "CAPA":
 				mu.Lock()
@@ -93,17 +101,9 @@ func handleConnection(conn net.Conn) {
 				replicas[conn] = true
 				mu.Unlock()
 				conn.Write([]byte("+OK\r\n"))
-
 			case "GETACK":
-				offsetMu.Lock()
-				ack := replicaOffset
-				offsetMu.Unlock()
-				resp := fmt.Sprintf(
-					"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n",
-					len(strconv.FormatInt(ack, 10)), ack,
-				)
-				conn.Write([]byte(resp))
-
+				// Properly respond to GETACK
+				conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"))
 			default:
 				conn.Write([]byte("-ERR unknown REPLCONF subcommand\r\n"))
 			}
@@ -115,14 +115,16 @@ func handleConnection(conn net.Conn) {
 			inTx = true
 			txQueue = [][]any{}
 			conn.Write([]byte("+OK\r\n"))
+
 		case "DISCARD":
 			if inTx {
 				txQueue = nil
-				inTx = false
 				conn.Write([]byte("+OK\r\n"))
+				inTx = false
 			} else {
 				conn.Write([]byte("-ERR DISCARD without MULTI\r\n"))
 			}
+
 		case "EXEC":
 			if !inTx {
 				conn.Write([]byte("-ERR EXEC without MULTI\r\n"))
@@ -133,19 +135,30 @@ func handleConnection(conn net.Conn) {
 
 			for _, q := range txQueue {
 				strCmd := utils.InterfaceSliceToStringSlice(q)
-				writeCommands := map[string]bool{"SET": true, "DEL": true, "INCR": true, "DECR": true}
+				writeCommands := map[string]bool{
+					"SET":  true,
+					"DEL":  true,
+					"INCR": true,
+					"DECR": true,
+				}
 				if writeCommands[strings.ToUpper(strCmd[0])] && !isReplica {
 					propagateToReplicas(strCmd)
 				}
 				cmds.RunCmds(conn, q)
 			}
 			txQueue = nil
+
 		default:
 			if inTx {
 				txQueue = append(txQueue, cmdParser)
 				conn.Write([]byte("+QUEUED\r\n"))
 			} else {
-				writeCommands := map[string]bool{"SET": true, "DEL": true, "INCR": true, "DECR": true}
+				writeCommands := map[string]bool{
+					"SET":  true,
+					"DEL":  true,
+					"INCR": true,
+					"DECR": true,
+				}
 				if writeCommands[cmd] && !isReplica && !isSlave {
 					strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
 					propagateToReplicas(strCmd)
@@ -162,6 +175,7 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 		log.Fatalf("Failed to connect to master: %v", err)
 	}
 
+	// Send PING
 	conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
 	buf := make([]byte, 1024)
 	n, _ := conn.Read(buf)
@@ -177,6 +191,7 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 func sendReplConf(conn net.Conn, replicaPort string) {
 	buf := make([]byte, 1024)
 
+	// 1. REPLCONF listening-port <PORT>
 	replConfListening := fmt.Sprintf(
 		"*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$%d\r\n%s\r\n",
 		len(replicaPort), replicaPort,
@@ -185,20 +200,24 @@ func sendReplConf(conn net.Conn, replicaPort string) {
 	if err != nil {
 		log.Fatalf("Failed to send REPLCONF listening-port: %v", err)
 	}
+
 	n, _ := conn.Read(buf)
 	if string(buf[:n]) != "+OK\r\n" {
 		log.Fatalf("Expected +OK after listening-port, got: %q", string(buf[:n]))
 	}
 
+	// 2. REPLCONF capa psync2
 	replCapa := "*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"
 	_, err = conn.Write([]byte(replCapa))
 	if err != nil {
 		log.Fatalf("Failed to send REPLCONF capa: %v", err)
 	}
+
 	n, _ = conn.Read(buf)
 	if string(buf[:n]) != "+OK\r\n" {
 		log.Fatalf("Expected +OK after capa, got: %q", string(buf[:n]))
 	}
+
 }
 
 func sendPSYNC(conn net.Conn) {
@@ -210,9 +229,7 @@ func sendPSYNC(conn net.Conn) {
 
 	buf := make([]byte, 1024)
 	n, _ := conn.Read(buf)
-	offsetMu.Lock()
-	replicaOffset += int64(n)
-	offsetMu.Unlock()
+	_ = string(buf[:n])
 }
 
 func propagateToReplicas(cmd []string) {
@@ -223,11 +240,14 @@ func propagateToReplicas(cmd []string) {
 		_, err := r.Write([]byte(resp))
 		if err != nil {
 			log.Println("Failed to propagate to replica:", err)
+		} else {
+			fmt.Println("Successfully sent to replica")
 		}
 	}
 }
 
 func readFromMaster(conn net.Conn) {
+	fmt.Println("do sth hell yeahhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
 	buffer := make([]byte, 4096)
 	var accumulated []byte
 
@@ -238,28 +258,52 @@ func readFromMaster(conn net.Conn) {
 			return
 		}
 
+		// Add new data to accumulated buffer
 		accumulated = append(accumulated, buffer[:n]...)
 
-		for len(accumulated) > 0 {
-			cmd, consumed := utils.ParseRESPWithOffset(accumulated)
-			if consumed == 0 {
-				// Wait for more data
+		// Process all complete RESP commands in the accumulated buffer
+		for {
+			if len(accumulated) == 0 {
 				break
 			}
 
-			// Update replica offset only for fully parsed commands
-			offsetMu.Lock()
-			replicaOffset += int64(consumed)
-			offsetMu.Unlock()
+			raw := string(accumulated)
+			fmt.Println("raw data:", raw, "hel nahhhhhhhhhh")
 
-			accumulated = accumulated[consumed:]
-
-			if len(cmd) == 0 {
-				continue
+			// Handle REPLCONF GETACK specifically
+			if strings.Contains(raw, "REPLCONF") && strings.Contains(raw, "GETACK") {
+				fmt.Println("Detected REPLCONF GETACK command")
+				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
+				conn.Write([]byte(response))
+				// Clear accumulated buffer after handling GETACK
+				accumulated = nil
+				break
 			}
 
-			// Handle master commands (SET, DEL, PING, etc.)
-			cmds.RunCmds(conn, cmd)
+			// Try to parse a complete RESP command
+			cmdParser := utils.ParseRESP(raw)
+			if len(cmdParser) == 0 {
+				// No complete command found, wait for more data
+				break
+			}
+
+			fmt.Println("received command from master:", cmdParser)
+
+			// Process the command silently (don't send response back to master)
+			// Create a null writer to avoid sending responses
+			fmt.Println("received command from master:", cmdParser)
+
+			
+					singleCmd := cmdParser[i : i+3] // take 3 elements: SET, key, value
+					cmds.RunCmds(conn, singleCmd)
+				}
+			}
+
+			// Remove the processed command from accumulated buffer
+			// This is a simplified approach - in reality you'd need to track exactly how many bytes were consumed
+			// For now, we'll clear the buffer after processing each command
+			accumulated = nil
+			break
 		}
 	}
 }

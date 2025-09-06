@@ -16,7 +16,6 @@ var redisKeyTypeStore = make(map[string]string)
 
 func RunCmds(conn net.Conn, cmdParser []interface{}) {
 
-
 	switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) {
 	case "PING":
 		conn.Write([]byte("+PONG\r\n"))
@@ -34,10 +33,15 @@ func RunCmds(conn net.Conn, cmdParser []interface{}) {
 
 		}
 
-		key := fmt.Sprintf("%v", cmdParser[1])
+		for i := 0; i < len(cmdParser); i += 3 {
+			if i+2 < len(cmdParser) {
 
-		redisKeyTypeStore[key] = "string"
-		handlers.SET(cmdParser[1:], conn)
+				key := fmt.Sprintf("%v", cmdParser[i])
+
+				redisKeyTypeStore[key] = "string"
+				handlers.SET(cmdParser[i:i+3], conn)
+			}
+		}
 
 	case "GET":
 		if len(cmdParser) < 2 {
