@@ -13,8 +13,6 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 )
 
-var isSlave = false
-
 var mu sync.RWMutex
 var replicas = make(map[net.Conn]bool)
 
@@ -44,7 +42,7 @@ func main() {
 			if len(parts) == 2 {
 				masterHost = parts[0]
 				masterPort = parts[1]
-				isSlave = true
+
 			}
 		}
 	}
@@ -129,8 +127,9 @@ func handleConnection(conn net.Conn) {
 				}
 				if writeCommands[strings.ToUpper(strCmd[0])] && isReplica {
 					propagateToReplicas(strCmd)
+				} else {
+					cmds.RunCmds(conn, q)
 				}
-				cmds.RunCmds(conn, q)
 			}
 			txQueue = nil
 
@@ -145,11 +144,12 @@ func handleConnection(conn net.Conn) {
 					"INCR": true,
 					"DECR": true,
 				}
-				if writeCommands[cmd] && !isReplica && !isSlave {
+				if writeCommands[cmd] && isReplica {
 					strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
 					propagateToReplicas(strCmd)
+				} else {
+					cmds.RunCmds(conn, cmdParser)
 				}
-				cmds.RunCmds(conn, cmdParser)
 			}
 		}
 	}
