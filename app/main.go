@@ -89,25 +89,11 @@ func handleConnection(conn net.Conn) {
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
 		if cmd == "REPLCONF" {
-			subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
-
-			fmt.Println(cmd, "inside handlecinnection")
-
-			// If it's the initial REPLCONF (listening-port/capa), mark as replica
-			switch subcmd {
-			case "LISTENING-PORT", "CAPA":
-				mu.Lock()
-				isReplica = true
-				replicas[conn] = true
-				mu.Unlock()
-				conn.Write([]byte("+OK\r\n"))
-			case "GETACK":
-				// Properly respond to GETACK
-				conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"))
-			default:
-				conn.Write([]byte("-ERR unknown REPLCONF subcommand\r\n"))
-			}
-			continue
+			mu.Lock()
+			isReplica = true
+			replicas[conn] = true
+			mu.Unlock()
+			conn.Write([]byte("+OK\r\n"))
 		}
 
 		switch cmd {
@@ -272,7 +258,6 @@ func readFromMaster(conn net.Conn) {
 
 			// Handle REPLCONF GETACK specifically
 			if strings.Contains(raw, "REPLCONF") && strings.Contains(raw, "GETACK") {
-				fmt.Println("Detected REPLCONF GETACK command")
 				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
 				conn.Write([]byte(response))
 				// Clear accumulated buffer after handling GETACK
