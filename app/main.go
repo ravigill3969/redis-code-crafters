@@ -280,6 +280,11 @@ func readFromMaster(conn net.Conn) {
 				break
 			}
 
+			if strings.Contains(raw, "PING") {
+				conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n154\r\n"))
+
+			}
+
 			cmdParser := utils.ParseRESP(raw)
 			if len(cmdParser) == 0 {
 				break
