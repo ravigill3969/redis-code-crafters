@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -230,50 +228,38 @@ func propagateToReplicas(cmd []string) {
 }
 
 func readFromMaster(conn net.Conn) {
-	fmt.Println("Replica: reading from master")
-	accumulated := []byte{}
-	reader := bufio.NewReader(conn)
+	buffer := make([]byte, 4096)
+	var accumulated []byte
 
 	for {
-		buf := make([]byte, 4096)
-		n, err := reader.Read(buf)
+		n, err := conn.Read(buffer)
 		if err != nil {
-			if err == io.EOF {
-				log.Println("Master closed connection")
-				return
-			}
-			log.Println("Error reading from master:", err)
+			log.Println("Lost connection to master:", err)
 			return
 		}
 
-		offsetMu.Lock()
-		replicaOffset += int64(n)
-		offsetMu.Unlock()
+		accumulated = append(accumulated, buffer[:n]...)
 
-		accumulated = append(accumulated, buf[:n]...)
-
-		for {
-			cmdParser, bytesRead := utils.ParseRESPWithOffset(accumulated)
-			if len(cmdParser) == 0 || bytesRead == 0 {
+		for len(accumulated) > 0 {
+			cmd, consumed := utils.ParseRESPWithOffset(accumulated)
+			if consumed == 0 {
+				// Wait for more data
 				break
 			}
 
-			if len(cmdParser) > 0 && strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) == "REPLCONF" {
-				subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
-				if subcmd == "GETACK" {
-					offsetMu.Lock()
-					ack := replicaOffset
-					offsetMu.Unlock()
-					resp := fmt.Sprintf(
-						"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n",
-						len(strconv.FormatInt(ack, 10)), ack)
-					conn.Write([]byte(resp))
-				}
-			} else {
-				cmds.RunCmds(conn, cmdParser)
+			// Update replica offset only for fully parsed commands
+			offsetMu.Lock()
+			replicaOffset += int64(consumed)
+			offsetMu.Unlock()
+
+			accumulated = accumulated[consumed:]
+
+			if len(cmd) == 0 {
+				continue
 			}
 
-			accumulated = accumulated[bytesRead:]
+			// Handle master commands (SET, DEL, PING, etc.)
+			cmds.RunCmds(conn, cmd)
 		}
 	}
 }
