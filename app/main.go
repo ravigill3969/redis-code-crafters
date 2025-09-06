@@ -41,7 +41,6 @@ func main() {
 			if len(parts) == 2 {
 				masterHost = parts[0]
 				masterPort = parts[1]
-
 			}
 		}
 	}
@@ -159,6 +158,7 @@ func handleConnection(conn net.Conn) {
 }
 
 func connectToMaster(masterHost, masterPort, replicaPort string) {
+	fmt.Println("hellllllllllllll yeahhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
 	conn, err := net.Dial("tcp", net.JoinHostPort(masterHost, masterPort))
 	if err != nil {
 		log.Fatalf("Failed to connect to master: %v", err)
