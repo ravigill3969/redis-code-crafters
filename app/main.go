@@ -270,17 +270,6 @@ func readFromMaster(conn net.Conn) {
 			raw := string(accumulated)
 			fmt.Println("raw data:", raw, "hel nahhhhhhhhhh")
 
-			// Handle REPLCONF GETACK specifically
-			if strings.Contains(raw, "REPLCONF") && strings.Contains(raw, "GETACK") {
-				fmt.Println("Detected REPLCONF GETACK command")
-				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
-				conn.Write([]byte(response))
-				// Clear accumulated buffer after handling GETACK
-				accumulated = nil
-				break
-			}
-
-			// Try to parse a complete RESP command
 			cmdParser := utils.ParseRESP(raw)
 			if len(cmdParser) == 0 {
 				// No complete command found, wait for more data
