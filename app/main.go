@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -240,7 +241,7 @@ func propagateToReplicas(cmd []string) {
 func readFromMaster(conn net.Conn) {
 	buffer := make([]byte, 4096)
 	var accumulated []byte
-	var replicaOffset int64 = 0 
+	var replicaOffset int64 = 0
 
 	for {
 		n, err := conn.Read(buffer)
@@ -259,24 +260,44 @@ func readFromMaster(conn net.Conn) {
 
 			cmdName := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
-			// Skip RDB bulk string (comes after FULLRESYNC)
+			// --- Handle FULLRESYNC + possible inline RDB bulk string ---
 			if cmdName == "FULLRESYNC" {
-				// Find the bulk string start ($...) and length
-				parts := strings.SplitN(string(accumulated), "\r\n", 3)
-				if len(parts) >= 3 && strings.HasPrefix(parts[2], "$") {
-					var rdbLen int
-					fmt.Sscanf(parts[2], "$%d", &rdbLen)
-					// Skip the bulk string: header + content + CRLF
-					accumulated = accumulated[len(parts[0])+len(parts[1])+len(parts[2])+rdbLen+4:]
-					continue
-				} else {
-					// just skip FULLRESYNC line if something is missing
-					accumulated = accumulated[len(parts[0])+len(parts[1])+2:]
-					continue
+				// Consume the FULLRESYNC line first
+				lineEnd := strings.Index(string(accumulated), "\r\n")
+				if lineEnd == -1 {
+					break // wait for more
 				}
+				accumulated = accumulated[lineEnd+2:]
+
+				// Now check if a bulk string ($<len>) follows
+				if len(accumulated) > 0 && accumulated[0] == '$' {
+					headerEnd := bytes.Index(accumulated, []byte("\r\n"))
+					if headerEnd == -1 {
+						break // incomplete bulk header
+					}
+
+					rdbLen, err := strconv.Atoi(string(accumulated[1:headerEnd]))
+					if err != nil {
+						log.Println("Invalid RDB length:", err)
+						return
+					}
+
+					consumedHeader := headerEnd + 2
+					totalRDB := consumedHeader + rdbLen + 2
+
+					// Wait until the full bulk string (RDB) arrives
+					if len(accumulated) < totalRDB {
+						break
+					}
+
+					// Skip RDB entirely
+					accumulated = accumulated[totalRDB:]
+					fmt.Println("Skipped RDB bulk string (len =", rdbLen, ")")
+				}
+				continue
 			}
 
-			// Handle REPLCONF GETACK
+			// --- Handle REPLCONF GETACK ---
 			if cmdName == "REPLCONF" &&
 				len(cmdParser) > 1 &&
 				strings.ToUpper(fmt.Sprintf("%v", cmdParser[1])) == "GETACK" {
@@ -292,18 +313,17 @@ func readFromMaster(conn net.Conn) {
 				continue
 			}
 
-			// Ignore PING commands
+			// --- Ignore PING ---
 			if cmdName == "PING" {
 				replicaOffset += int64(len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmdParser))))
 				accumulated = accumulated[len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmdParser))):]
 				continue
 			}
 
-			// Run normal commands from masters
+			// --- Normal commands from master ---
 			fmt.Println("received command from master:", cmdParser)
 			cmds.RunCmds(conn, cmdParser)
 
-			// Update replica offset
 			replicaOffset += int64(len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmdParser))))
 			accumulated = accumulated[len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmdParser))):]
 		}
