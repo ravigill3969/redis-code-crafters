@@ -291,7 +291,14 @@ func readFromMaster(conn net.Conn) {
 
 			// Process the command silently (don't send response back to master)
 			// Create a null writer to avoid sending responses
-			cmds.RunCmds(conn, cmdParser)
+			fmt.Println("received command from master:", cmdParser)
+
+			for i := 0; i < len(cmdParser); i += 3 {
+				if i+2 < len(cmdParser) {
+					singleCmd := cmdParser[i : i+3] // take 3 elements: SET, key, value
+					cmds.RunCmds(conn, singleCmd)
+				}
+			}
 
 			// Remove the processed command from accumulated buffer
 			// This is a simplified approach - in reality you'd need to track exactly how many bytes were consumed
