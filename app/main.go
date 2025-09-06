@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -233,10 +234,11 @@ func propagateToReplicas(cmd []string) {
 		}
 	}
 }
-
 func readFromMaster(conn net.Conn) {
 	buffer := make([]byte, 4096)
 	var accumulated []byte
+	var replicaOffset int64 = 0
+	var rdbMode bool = false
 
 	for {
 		n, err := conn.Read(buffer)
@@ -245,41 +247,79 @@ func readFromMaster(conn net.Conn) {
 			return
 		}
 
-		// Add new data to accumulated buffer
 		accumulated = append(accumulated, buffer[:n]...)
 
-		sum := 0
+		// Handle full resync (RDB)
+		if !rdbMode && bytes.HasPrefix(accumulated, []byte("REDIS")) {
+			rdbMode = true
+		}
 
-		GETACKFirstTimeProcessed := false
-		for {
-			if len(accumulated) == 0 {
-				break
+		if rdbMode {
+			// Look for the end of the RDB (this is simplistic; in real Redis you'd detect EOF or start of RESP)
+			if len(accumulated) < 9 || !bytes.HasPrefix(accumulated[len(accumulated)-9:], []byte("*1\r\n$4\r\nPING\r\n")) {
+				// Still receiving RDB
+				replicaOffset += int64(n)
+				continue
+			} else {
+				// RDB finished, leave only leftover bytes for RESP parsing
+				replicaOffset += int64(n)
+				accumulated = accumulated[len(accumulated)-9:] // keep leftover
+				rdbMode = false
 			}
+		}
 
-			raw := string(accumulated)
-
-			if strings.Contains(raw, "REPLCONF") && strings.Contains(raw, "GETACK") && !GETACKFirstTimeProcessed {
-				response := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n%d\r\n", sum)
-				conn.Write([]byte(response))
-				GETACKFirstTimeProcessed = true
-				accumulated = nil
-				break
-			}
-			sum += len(raw)
-
-			cmdParser := utils.ParseRESP(raw)
+		// Parse RESP commands
+		for len(accumulated) > 0 {
+			cmdParser := utils.ParseRESP(string(accumulated))
 			if len(cmdParser) == 0 {
 				break
 			}
 
-			if cmdParser[0] == "PING" {
+			cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
+
+			if cmd == "PING" {
+				strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
+				resp := utils.EncodeAsRESPArray(strCmd)
+				replicaOffset += int64(len(resp))
+				accumulated = accumulated[len(resp):]
+
+				continue
+			}
+
+			if cmd == "REPLCONF" && len(cmdParser) > 1 && strings.ToUpper(fmt.Sprintf("%v", cmdParser[1])) == "GETACK" {
+				// Convert interface{} slice to string slice
+				strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
+
+				// Encode the command to RESP
+				resp := utils.EncodeAsRESPArray(strCmd)
+
+				// Send REPLCONF ACK with the current replica offset
+				response := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n",
+					len(strconv.FormatInt(replicaOffset, 10)), replicaOffset)
+				conn.Write([]byte(response))
+
+				// Update replicaOffset by the length of the RESP command
+				replicaOffset += int64(len(resp))
+
+				// Remove the processed bytes from accumulated
+				accumulated = accumulated[len(resp):]
+
 				continue
 			}
 
 			fmt.Println("received command from master:", cmdParser)
-
 			cmds.RunCmds(conn, cmdParser)
-		}
+			strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
 
+			// Encode as RESP
+			resp := utils.EncodeAsRESPArray(strCmd)
+
+			// Increment replica offset by the length of the RESP bytes
+			replicaOffset += int64(len(resp))
+
+			// Remove the processed bytes from accumulated
+			accumulated = accumulated[len(resp):]
+
+		}
 	}
 }
