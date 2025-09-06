@@ -85,6 +85,7 @@ func handleConnection(conn net.Conn) {
 		fmt.Println(cmdParser)
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
+		fmt.Println(cmd)
 
 		if cmd == "REPLCONF" {
 			mu.Lock()
@@ -126,6 +127,8 @@ func handleConnection(conn net.Conn) {
 					"DECR": true,
 				}
 				if writeCommands[strings.ToUpper(strCmd[0])] && isReplica {
+					fmt.Println("prpogate to replica", cmdParser)
+
 					propagateToReplicas(strCmd)
 				} else {
 					cmds.RunCmds(conn, q)
@@ -145,6 +148,7 @@ func handleConnection(conn net.Conn) {
 					"DECR": true,
 				}
 				if writeCommands[cmd] && isReplica {
+					fmt.Println("prpogate to replica", cmdParser)
 					strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
 					propagateToReplicas(strCmd)
 				} else {
