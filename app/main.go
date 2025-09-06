@@ -128,9 +128,10 @@ func handleConnection(conn net.Conn) {
 				}
 				if writeCommands[strings.ToUpper(strCmd[0])] && isReplica {
 					fmt.Println("prpogate to replica", cmdParser)
-
+					
 					propagateToReplicas(strCmd)
-				} else {
+					} else {
+					fmt.Println("Direct", cmdParser)
 					cmds.RunCmds(conn, q)
 				}
 			}
@@ -141,6 +142,7 @@ func handleConnection(conn net.Conn) {
 				txQueue = append(txQueue, cmdParser)
 				conn.Write([]byte("+QUEUED\r\n"))
 			} else {
+				fmt.Println("Direct", cmdParser)
 				writeCommands := map[string]bool{
 					"SET":  true,
 					"DEL":  true,
