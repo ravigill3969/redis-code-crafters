@@ -91,6 +91,8 @@ func handleConnection(conn net.Conn) {
 		if cmd == "REPLCONF" {
 			subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
 
+			fmt.Println(cmd , "inside handlecinnection")
+
 			// If it's the initial REPLCONF (listening-port/capa), mark as replica
 			switch subcmd {
 			case "LISTENING-PORT", "CAPA":
