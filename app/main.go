@@ -95,9 +95,6 @@ func handleConnection(conn net.Conn) {
 		if cmd == "REPLCONF" {
 			subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
 
-			fmt.Println(cmd, "inside handleconnection")
-
-			// If it's the initial REPLCONF (listening-port/capa), mark as replica
 			switch subcmd {
 			case "LISTENING-PORT", "CAPA":
 				mu.Lock()
@@ -107,7 +104,7 @@ func handleConnection(conn net.Conn) {
 				conn.Write([]byte("+OK\r\n"))
 
 			case "GETACK":
-				// NEW: respond with tracked offset
+				// Respond with tracked offset
 				offsetMu.Lock()
 				ack := replicaOffset
 				offsetMu.Unlock()
@@ -242,9 +239,61 @@ func sendPSYNC(conn net.Conn) {
 
 	buf := make([]byte, 1024)
 	n, _ := conn.Read(buf)
+	reply := string(buf[:n])
+	fmt.Println("PSYNC reply:", reply)
 
+	if strings.HasPrefix(reply, "+FULLRESYNC") {
+		// Consume RDB bulk string
+		consumeRDB(conn)
+	}
+}
+
+// NEW: handle RDB snapshot
+func consumeRDB(conn net.Conn) {
+	reader := make([]byte, 1)
+	var lengthStr strings.Builder
+
+	// Expect first char to be '$'
+	_, err := conn.Read(reader)
+	if err != nil || reader[0] != '$' {
+		log.Fatalf("Expected RDB bulk string, got: %q", reader[0])
+	}
+
+	// Read length until CRLF
+	for {
+		_, err := conn.Read(reader)
+		if err != nil {
+			log.Fatalf("Error reading RDB length: %v", err)
+		}
+		if reader[0] == '\r' {
+			// consume '\n'
+			conn.Read(reader)
+			break
+		}
+		lengthStr.WriteByte(reader[0])
+	}
+
+	length, err := strconv.Atoi(lengthStr.String())
+	if err != nil {
+		log.Fatalf("Invalid RDB length: %v", err)
+	}
+
+	// Read and discard RDB payload
+	discard := make([]byte, 4096)
+	total := 0
+	for total < length {
+		n, err := conn.Read(discard)
+		if err != nil {
+			log.Fatalf("Error reading RDB payload: %v", err)
+		}
+		total += n
+	}
+
+	fmt.Printf("✅ Discarded RDB payload (%d bytes)\n", total)
+
+	// Update offset
 	offsetMu.Lock()
-	replicaOffset += int64(n) // ✅ count bytes of PSYNC reply too
+	replicaOffset += int64(len(lengthStr.String()) + 3 + length) // "$len\r\n<bytes>"
 	offsetMu.Unlock()
 }
 
