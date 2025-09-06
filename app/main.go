@@ -312,6 +312,7 @@ func readFromMaster(conn net.Conn) {
 				accumulated = accumulated[len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmdParser))):]
 				continue
 			}
+			
 
 			// Run normal commands from master
 			fmt.Println("received command from master:", cmdParser)
