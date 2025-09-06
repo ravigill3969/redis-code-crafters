@@ -221,6 +221,8 @@ func sendPSYNC(conn net.Conn) {
 	resp := string(buf[:n])
 
 	fmt.Println("send psync received res", resp)
+
+	conn.Write([]byte("wtf"))
 }
 
 func propagateToReplicas(cmd []string) {
