@@ -209,18 +209,6 @@ func sendReplConf(conn net.Conn, replicaPort string) {
 
 }
 
-func sendPSYNC(conn net.Conn) {
-	psync := "*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"
-	_, err := conn.Write([]byte(psync))
-	if err != nil {
-		log.Fatalf("Failed to send PSYNC: %v", err)
-	}
-
-	buf := make([]byte, 1024)
-	n, _ := conn.Read(buf)
-	_ = string(buf[:n])
-}
-
 func propagateToReplicas(cmd []string) {
 	resp := utils.EncodeAsRESPArray(cmd)
 	mu.RLock()
@@ -234,14 +222,59 @@ func propagateToReplicas(cmd []string) {
 		}
 	}
 }
+func sendPSYNC(conn net.Conn) {
+	psync := "*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"
+	_, err := conn.Write([]byte(psync))
+	if err != nil {
+		log.Fatalf("Failed to send PSYNC: %v", err)
+	}
+
+	// Read master reply: should be "+FULLRESYNC <runid> <offset>\r\n"
+	buf := make([]byte, 4096)
+	n, err := conn.Read(buf)
+	if err != nil {
+		log.Fatalf("Failed to read PSYNC response: %v", err)
+	}
+	line := string(buf[:n])
+	if !strings.HasPrefix(line, "+FULLRESYNC") {
+		log.Fatalf("Expected FULLRESYNC, got: %q", line)
+	}
+
+	fmt.Println("Master responded with:", line)
+
+	// Now master will send the RDB file as a bulk string
+	// Read the RDB bulk string length first: $<length>\r\n
+	rdbStart := strings.Index(line, "$")
+	if rdbStart == -1 {
+		log.Fatalf("Cannot find RDB bulk start in line: %q", line)
+	}
+	rdbLenStr := line[rdbStart+1 : len(line)-2] // remove \r\n
+	rdbLen, err := strconv.Atoi(rdbLenStr)
+	if err != nil {
+		log.Fatalf("Invalid RDB length: %v", err)
+	}
+
+	// Read RDB bytes
+	rdbData := make([]byte, rdbLen)
+	read := 0
+	for read < rdbLen {
+		n, err := conn.Read(rdbData[read:])
+		if err != nil {
+			log.Fatalf("Failed to read RDB data: %v", err)
+		}
+		read += n
+	}
+
+	fmt.Println("RDB file received, length:", rdbLen)
+
+	// After RDB is fully read, we're ready to process normal commands
+	readFromMaster(conn)
+}
 
 func readFromMaster(conn net.Conn) {
 	buffer := make([]byte, 4096)
 	var accumulated []byte
-
-	var replicaOffset int64 = 0     // tracks total processed bytes
-	var readingRDB bool = false     // are we currently reading RDB?
-	var rdbBytesRemaining int64 = 0 // how many bytes of RDB remain to read
+	var replicaOffset int64 = 0
 
 	for {
 		n, err := conn.Read(buffer)
@@ -250,75 +283,44 @@ func readFromMaster(conn net.Conn) {
 			return
 		}
 
-		data := buffer[:n]
+		accumulated = append(accumulated, buffer[:n]...)
 
-		// If we are reading RDB bulk data, process it first
-		if readingRDB {
-			if int64(len(data)) <= rdbBytesRemaining {
-				replicaOffset += int64(len(data))
-				rdbBytesRemaining -= int64(len(data))
-				// Done with RDB?
-				if rdbBytesRemaining == 0 {
-					readingRDB = false
-					fmt.Println("Finished reading RDB, now processing commands")
-				}
-				continue
-			} else {
-				// Last chunk of RDB + extra command bytes
-				replicaOffset += rdbBytesRemaining
-				data = data[rdbBytesRemaining:]
-				rdbBytesRemaining = 0
-				readingRDB = false
-				accumulated = append(accumulated, data...)
-			}
-		} else {
-			// Append new data for normal RESP parsing
-			accumulated = append(accumulated, data...)
-		}
-
-		// Parse commands in accumulated buffer
 		for len(accumulated) > 0 {
 			cmdParser := utils.ParseRESP(string(accumulated))
 			if len(cmdParser) == 0 {
-				// incomplete command, wait for more data
-				break
+				break // wait for more data
 			}
 
-			cmdName := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
-
 			// Handle REPLCONF GETACK
-			if cmdName == "REPLCONF" &&
+			if strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) == "REPLCONF" &&
 				len(cmdParser) > 1 &&
 				strings.ToUpper(fmt.Sprintf("%v", cmdParser[1])) == "GETACK" {
 
-				resp := fmt.Sprintf(
-					"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n",
-					len(strconv.FormatInt(replicaOffset, 10)), replicaOffset,
-				)
+				resp := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n",
+					len(strconv.FormatInt(replicaOffset, 10)), replicaOffset)
 				_, err := conn.Write([]byte(resp))
 				if err != nil {
 					log.Println("Failed to respond to GETACK:", err)
 					return
 				}
 
-				// remove processed command from buffer
+				// Remove processed command
 				accumulated = accumulated[len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmdParser))):]
 				continue
 			}
 
 			// Ignore PING commands
-			if cmdName == "PING" {
+			if strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) == "PING" {
 				replicaOffset += int64(len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmdParser))))
 				accumulated = accumulated[len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmdParser))):]
 				continue
 			}
-			
 
-			// Run normal commands from master
+			// Run normal commands
 			fmt.Println("received command from master:", cmdParser)
 			cmds.RunCmds(conn, cmdParser)
 
-			// Update replica offset and remove processed bytes
+			// Update offset
 			replicaOffset += int64(len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmdParser))))
 			accumulated = accumulated[len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmdParser))):]
 		}
