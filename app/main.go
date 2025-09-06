@@ -34,7 +34,7 @@ func main() {
 		log.Fatalf("Failed to bind port: %v", err)
 	}
 
-	// Parse --replicaof argument
+	
 	masterHost, masterPort := "", ""
 	for i := 0; i < len(os.Args); i++ {
 		if os.Args[i] == "--replicaof" && i+1 < len(os.Args) {
@@ -49,6 +49,7 @@ func main() {
 
 	// If replica, connect to master and perform handshake
 	if masterHost != "" && masterPort != "" {
+		fmt.Println("connecting to ater")
 		go connectToMaster(masterHost, masterPort, PORT)
 	}
 
@@ -81,8 +82,6 @@ func handleConnection(conn net.Conn) {
 		if len(cmdParser) == 0 {
 			continue
 		}
-
-		fmt.Println(cmdParser)
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 		fmt.Println(cmd)
