@@ -91,7 +91,7 @@ func handleConnection(conn net.Conn) {
 		if cmd == "REPLCONF" {
 			subcmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[1]))
 
-			fmt.Println(cmd , "inside handlecinnection")
+			fmt.Println(cmd, "inside handlecinnection")
 
 			// If it's the initial REPLCONF (listening-port/capa), mark as replica
 			switch subcmd {
@@ -230,8 +230,7 @@ func sendPSYNC(conn net.Conn) {
 
 	buf := make([]byte, 1024)
 	n, _ := conn.Read(buf)
-	resp := string(buf[:n])
-	fmt.Println("Received PSYNC response from master:", resp)
+	_ = string(buf[:n])
 	fmt.Println("end of send psync")
 }
 
