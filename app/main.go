@@ -128,9 +128,9 @@ func handleConnection(conn net.Conn) {
 				}
 				if writeCommands[strings.ToUpper(strCmd[0])] && isReplica {
 					fmt.Println("prpogate to replica", cmdParser)
-					
+
 					propagateToReplicas(strCmd)
-					} else {
+				} else {
 					fmt.Println("Direct", cmdParser)
 					cmds.RunCmds(conn, q)
 				}
@@ -271,11 +271,13 @@ func readFromMaster(conn net.Conn) {
 			}
 			sum += len(raw)
 
-			fmt.Println(sum)
-
 			cmdParser := utils.ParseRESP(raw)
 			if len(cmdParser) == 0 {
 				break
+			}
+
+			if cmdParser[0] == "PING" {
+				continue
 			}
 
 			fmt.Println("received command from master:", cmdParser)
