@@ -299,7 +299,7 @@ func readFromMaster(conn net.Conn) {
 				continue
 			}
 
-			// Run normal commands from master
+			// Run normal commands from masters
 			fmt.Println("received command from master:", cmdParser)
 			cmds.RunCmds(conn, cmdParser)
 
