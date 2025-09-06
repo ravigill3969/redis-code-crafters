@@ -268,51 +268,52 @@ func sendPSYNC(conn net.Conn) {
 	fmt.Println("RDB file received, length:", rdbLen)
 
 	// After RDB is fully read, we're ready to process normal commands
+	fmt.Println("error from here")
 	readFromMaster(conn)
 }
 func readFromMaster(conn net.Conn) {
-    // Step 1: Read and discard RDB
-    rdbLength := <get from FULLRESYNC reply>
-    rdbData := make([]byte, rdbLength)
-    read := 0
-    for read < rdbLength {
-        n, _ := conn.Read(rdbData[read:])
-        read += n
-    }
+	// Step 1: Read and discard RDB
+	rdbLength := 0
+	rdbData := make([]byte, rdbLength)
+	read := 0
+	for read < rdbLength {
+		n, _ := conn.Read(rdbData[read:])
+		read += n
+	}
 
-    // Step 2: Ready to process RESP commands
-    var accumulated []byte
-    var offset int64 = 0
-    buffer := make([]byte, 4096)
+	// Step 2: Ready to process RESP commands
+	var accumulated []byte
+	var offset int64 = 0
+	buffer := make([]byte, 4096)
 
-    for {
-        n, err := conn.Read(buffer)
-        if err != nil {
-            log.Println("Lost connection to master:", err)
-            return
-        }
-        accumulated = append(accumulated, buffer[:n]...)
+	for {
+		n, err := conn.Read(buffer)
+		if err != nil {
+			log.Println("Lost connection to master:", err)
+			return
+		}
+		accumulated = append(accumulated, buffer[:n]...)
 
-        for len(accumulated) > 0 {
-            cmd := utils.ParseRESP(string(accumulated))
-            if len(cmd) == 0 {
-                break
-            }
+		for len(accumulated) > 0 {
+			cmd := utils.ParseRESP(string(accumulated))
+			if len(cmd) == 0 {
+				break
+			}
 
-            if strings.ToUpper(fmt.Sprintf("%v", cmd[0])) == "REPLCONF" &&
-               len(cmd) > 1 &&
-               strings.ToUpper(fmt.Sprintf("%v", cmd[1])) == "GETACK" {
-                resp := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n",
-                    len(strconv.FormatInt(offset, 10)), offset)
-                conn.Write([]byte(resp))
-            } else {
-                cmds.RunCmds(conn, cmd)
-            }
+			if strings.ToUpper(fmt.Sprintf("%v", cmd[0])) == "REPLCONF" &&
+				len(cmd) > 1 &&
+				strings.ToUpper(fmt.Sprintf("%v", cmd[1])) == "GETACK" {
+				resp := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n",
+					len(strconv.FormatInt(offset, 10)), offset)
+				conn.Write([]byte(resp))
+			} else {
+				cmds.RunCmds(conn, cmd)
+			}
 
-            // Remove parsed bytes from accumulated
-            encodedLen := len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmd)))
-            accumulated = accumulated[encodedLen:]
-            offset += int64(encodedLen)
-        }
-    }
+			// Remove parsed bytes from accumulated
+			encodedLen := len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmd)))
+			accumulated = accumulated[encodedLen:]
+			offset += int64(encodedLen)
+		}
+	}
 }
