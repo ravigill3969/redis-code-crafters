@@ -269,7 +269,7 @@ func readFromMaster(conn net.Conn) {
 			}
 
 			raw := string(accumulated)
-			fmt.Println("raw data:", raw)
+			fmt.Println("raw data:", raw, "hel nahhhhhhhhhh")
 
 			// Handle REPLCONF GETACK specifically
 			if strings.Contains(raw, "REPLCONF") && strings.Contains(raw, "GETACK") {
