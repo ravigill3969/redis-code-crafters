@@ -302,39 +302,3 @@ func readFromMaster(conn net.Conn) {
 		}
 	}
 }
-
-// NullConn is a dummy connection that discards all writes
-type NullConn struct{}
-
-func (nc *NullConn) Read(b []byte) (n int, err error) {
-	return 0, fmt.Errorf("read not supported")
-}
-
-func (nc *NullConn) Write(b []byte) (n int, err error) {
-	// Silently discard the write - this prevents responses from being sent to master
-	return len(b), nil
-}
-
-func (nc *NullConn) Close() error {
-	return nil
-}
-
-func (nc *NullConn) LocalAddr() net.Addr {
-	return nil
-}
-
-func (nc *NullConn) RemoteAddr() net.Addr {
-	return nil
-}
-
-func (nc *NullConn) SetDeadline(t interface{}) error {
-	return nil
-}
-
-func (nc *NullConn) SetReadDeadline(t interface{}) error {
-	return nil
-}
-
-func (nc *NullConn) SetWriteDeadline(t interface{}) error {
-	return nil
-}
