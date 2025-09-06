@@ -135,6 +135,7 @@ func handleConnection(conn net.Conn) {
 			txQueue = nil
 
 		default:
+			fmt.Println("here in default")
 			if inTx {
 				txQueue = append(txQueue, cmdParser)
 				conn.Write([]byte("+QUEUED\r\n"))
@@ -249,19 +250,15 @@ func readFromMaster(conn net.Conn) {
 
 		accumulated = append(accumulated, buffer[:n]...)
 
-		// Handle full resync (RDB)
 		if !rdbMode && bytes.HasPrefix(accumulated, []byte("REDIS")) {
 			rdbMode = true
 		}
 
 		if rdbMode {
-			// Look for the end of the RDB (this is simplistic; in real Redis you'd detect EOF or start of RESP)
 			if len(accumulated) < 9 || !bytes.HasPrefix(accumulated[len(accumulated)-9:], []byte("*1\r\n$4\r\nPING\r\n")) {
-				// Still receiving RDB
 				replicaOffset += int64(n)
 				continue
 			} else {
-				// RDB finished, leave only leftover bytes for RESP parsing
 				replicaOffset += int64(n)
 				accumulated = accumulated[len(accumulated)-9:] // keep leftover
 				rdbMode = false
@@ -287,21 +284,16 @@ func readFromMaster(conn net.Conn) {
 			}
 
 			if cmd == "REPLCONF" && len(cmdParser) > 1 && strings.ToUpper(fmt.Sprintf("%v", cmdParser[1])) == "GETACK" {
-				// Convert interface{} slice to string slice
 				strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
 
-				// Encode the command to RESP
 				resp := utils.EncodeAsRESPArray(strCmd)
 
-				// Send REPLCONF ACK with the current replica offset
 				response := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%d\r\n",
 					len(strconv.FormatInt(replicaOffset, 10)), replicaOffset)
 				conn.Write([]byte(response))
 
-				// Update replicaOffset by the length of the RESP command
 				replicaOffset += int64(len(resp))
 
-				// Remove the processed bytes from accumulated
 				accumulated = accumulated[len(resp):]
 
 				continue
@@ -311,13 +303,10 @@ func readFromMaster(conn net.Conn) {
 			cmds.RunCmds(conn, cmdParser)
 			strCmd := utils.InterfaceSliceToStringSlice(cmdParser)
 
-			// Encode as RESP
 			resp := utils.EncodeAsRESPArray(strCmd)
 
-			// Increment replica offset by the length of the RESP bytes
 			replicaOffset += int64(len(resp))
 
-			// Remove the processed bytes from accumulated
 			accumulated = accumulated[len(resp):]
 
 		}
