@@ -265,6 +265,8 @@ func readFromMaster(conn net.Conn) {
 			}
 			sum += len(raw)
 
+			fmt.Println(sum)
+
 			cmdParser := utils.ParseRESP(raw)
 			if len(cmdParser) == 0 {
 				break
