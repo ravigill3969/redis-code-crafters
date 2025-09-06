@@ -127,7 +127,7 @@ func handleConnection(conn net.Conn) {
 					"INCR": true,
 					"DECR": true,
 				}
-				if writeCommands[strings.ToUpper(strCmd[0])] && !isReplica {
+				if writeCommands[strings.ToUpper(strCmd[0])] && isReplica {
 					propagateToReplicas(strCmd)
 				}
 				cmds.RunCmds(conn, q)
@@ -233,7 +233,6 @@ func propagateToReplicas(cmd []string) {
 }
 
 func readFromMaster(conn net.Conn) {
-	fmt.Println("do sth hell yeahhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
 	buffer := make([]byte, 4096)
 	var accumulated []byte
 
@@ -247,28 +246,24 @@ func readFromMaster(conn net.Conn) {
 		// Add new data to accumulated buffer
 		accumulated = append(accumulated, buffer[:n]...)
 
-		// Process all complete RESP commands in the accumulated buffer
+		sum := 0
+
+		GETACKFirstTimeProcessed := false
 		for {
 			if len(accumulated) == 0 {
 				break
 			}
 
 			raw := string(accumulated)
-			fmt.Println("raw data:", raw, "hel nahhhhhhhhhh")
 
-			// Handle REPLCONF GETACK specifically
-			if strings.Contains(raw, "REPLCONF") && strings.Contains(raw, "GETACK") {
-				response := "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"
+			if strings.Contains(raw, "REPLCONF") && strings.Contains(raw, "GETACK") && !GETACKFirstTimeProcessed {
+				response := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n%d\r\n", sum)
 				conn.Write([]byte(response))
-				// Clear accumulated buffer after handling GETACK
+				GETACKFirstTimeProcessed = true
 				accumulated = nil
 				break
 			}
-
-			if strings.Contains(raw, "PING") {
-				conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$3\r\n154\r\n"))
-
-			}
+			sum += len(raw)
 
 			cmdParser := utils.ParseRESP(raw)
 			if len(cmdParser) == 0 {
