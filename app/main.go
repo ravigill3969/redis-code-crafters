@@ -220,7 +220,7 @@ func sendPSYNC(conn net.Conn) {
 }
 
 func propagateToReplicas(cmd []string) {
-	fmt.Println("inside peopogate to replicas")
+	fmt.Println("inside peopogate to replicas" , cmd)
 	resp := utils.EncodeAsRESPArray(cmd)
 	mu.RLock()
 	defer mu.RUnlock()
