@@ -35,7 +35,7 @@ func main() {
 	// check if replica
 	masterHost, masterPort := "", ""
 	for i := 0; i < len(os.Args); i++ {
-		if os.Args[i] == "--replicaof" && i+2 <= len(os.Args) {
+		if os.Args[i] == "--replicaof" && i+2 < len(os.Args) {
 			masterHost = os.Args[i+1]
 			masterPort = os.Args[i+2]
 		}
