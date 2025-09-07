@@ -70,6 +70,7 @@ func handleConnection(conn net.Conn) {
 	var isReplica bool = false
 
 	for {
+		fmt.Println("received inside handle connection")
 		n, err := conn.Read(buffer)
 		if err != nil {
 			return
@@ -253,9 +254,11 @@ func readFromMaster(conn net.Conn) {
 			return
 		}
 
-		fmt.Println("wtf i recived", strings.ReplaceAll(string(buffer), "\r\n", " | "))
-
 		accumulated = append(accumulated, buffer[:n]...)
+
+		cmd := utils.ParseRESP(string(accumulated))
+
+		fmt.Println(cmd...)
 
 	}
 }
