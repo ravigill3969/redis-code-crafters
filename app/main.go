@@ -247,8 +247,10 @@ func readFromMaster(conn net.Conn) {
 	fmt.Println("read from master begin")
 
 	for {
+		fmt.Println(conn.RemoteAddr())
 		fmt.Println("read from master on going")
 		n, err := conn.Read(buffer)
+
 		if err != nil {
 			log.Println("Lost connection to master:", err)
 			return
