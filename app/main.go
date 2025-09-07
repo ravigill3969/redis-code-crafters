@@ -45,12 +45,10 @@ func main() {
 		}
 	}
 
-	// If replica, connect to master and perform handshake
 	if masterHost != "" && masterPort != "" {
 		go connectToMaster(masterHost, masterPort, PORT)
 	}
 
-	// Accept client connections (for GET/SET/etc.)
 	for {
 		conn, err := l.Accept()
 		if err != nil {
