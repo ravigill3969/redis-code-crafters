@@ -74,8 +74,8 @@ func handleConnection(conn net.Conn) {
 		}
 		raw := string(buffer[:n])
 
-		fmt.Println("received", string(raw))
 		cmdParser := utils.ParseRESP(raw)
+		fmt.Println("received", cmdParser)
 		if len(cmdParser) == 0 {
 			continue
 		}
