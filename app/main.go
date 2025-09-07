@@ -287,7 +287,7 @@ func readFromMaster(conn net.Conn) {
 					consumedHeader := headerEnd + 2
 					totalRDB := consumedHeader + rdbLen + 2
 
-					// Wait until the full bulk string (RDB) arrives
+					// Wait until the full bulk string (RDB) arrives ---
 					if len(accumulated) < totalRDB {
 						break
 					}
