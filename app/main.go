@@ -262,7 +262,7 @@ func readFromMaster(conn net.Conn) {
 
 			cmdName := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
-			// --- Handle FULLRESYNC + possible inline RDB bulk string ---
+			// --- Handle FULLRESYNC + possible inline RDB bulk string --
 			if cmdName == "FULLRESYNC" {
 				// Consume the FULLRESYNC line first
 				lineEnd := strings.Index(string(accumulated), "\r\n")
