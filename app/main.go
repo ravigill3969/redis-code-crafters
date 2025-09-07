@@ -259,6 +259,8 @@ func readFromMaster(conn net.Conn) {
 				break
 			}
 
+			fmt.Println(cmdParser...)
+
 			cmdName := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 
 			// --- Handle FULLRESYNC + possible inline RDB bulk string --
@@ -322,7 +324,6 @@ func readFromMaster(conn net.Conn) {
 			}
 
 			// --- Normal commands from master ---
-			fmt.Println("received command from master:", cmdParser)
 			cmds.RunCmds(conn, cmdParser)
 
 			replicaOffset += int64(len(utils.EncodeAsRESPArray(utils.InterfaceSliceToStringSlice(cmdParser))))
