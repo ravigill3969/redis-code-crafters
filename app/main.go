@@ -250,6 +250,8 @@ func readFromMaster(conn net.Conn) {
 			return
 		}
 
+		fmt.Println("wtf i recived", n)
+
 		accumulated = append(accumulated, buffer[:n]...)
 
 		for len(accumulated) > 0 {
