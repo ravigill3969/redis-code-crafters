@@ -218,13 +218,12 @@ func sendPSYNC(conn net.Conn) {
 
 	buf := make([]byte, 1024)
 	n, _ := conn.Read(buf)
-	resp := string(buf[:n])
-
-	fmt.Println("send psync received res", resp)
+	_ = string(buf[:n])
 
 }
 
 func propagateToReplicas(cmd []string) {
+	fmt.Println("inside peopogate to replicas")
 	resp := utils.EncodeAsRESPArray(cmd)
 	mu.RLock()
 	defer mu.RUnlock()
@@ -257,7 +256,7 @@ func readFromMaster(conn net.Conn) {
 		for len(accumulated) > 0 {
 			cmdParser := utils.ParseRESP(string(accumulated))
 			if len(cmdParser) == 0 {
-				break 
+				break
 			}
 
 			cmdName := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
