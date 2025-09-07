@@ -249,7 +249,7 @@ func readFromMaster(conn net.Conn) {
 			return
 		}
 
-		fmt.Println("wtf i recived", string(buffer))
+		fmt.Println("wtf i recived", strings.ReplaceAll(string(buffer), "\r\n", " | "))
 
 		accumulated = append(accumulated, buffer[:n]...)
 
