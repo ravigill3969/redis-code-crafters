@@ -242,7 +242,6 @@ func propagateToReplicas(cmd []string) {
 func readFromMaster(conn net.Conn) {
 	buffer := make([]byte, 4096)
 	var accumulated []byte
-	// var replicaOffset int64 = 0
 
 	fmt.Println("read from master begin")
 
