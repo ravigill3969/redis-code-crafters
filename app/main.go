@@ -41,11 +41,13 @@ func main() {
 			if len(parts) == 2 {
 				masterHost = parts[0]
 				masterPort = parts[1]
+				fmt.Println("master with port", masterHost, masterPort)
 			}
 		}
 	}
 
 	if masterHost != "" && masterPort != "" {
+		fmt.Println("before connecting to master")
 		go connectToMaster(masterHost, masterPort, PORT)
 	}
 
@@ -84,6 +86,7 @@ func handleConnection(conn net.Conn) {
 		fmt.Println(cmd)
 
 		if cmd == "REPLCONF" {
+			fmt.Println("its a replica")
 			mu.Lock()
 			isReplica = true
 			replicas[conn] = true
@@ -159,6 +162,7 @@ func handleConnection(conn net.Conn) {
 }
 
 func connectToMaster(masterHost, masterPort, replicaPort string) {
+	fmt.Println("connecting to master")
 	conn, err := net.Dial("tcp", net.JoinHostPort(masterHost, masterPort))
 	if err != nil {
 		log.Fatalf("Failed to connect to master: %v", err)
@@ -173,10 +177,12 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 
 	sendReplConf(conn, replicaPort)
 	sendPSYNC(conn)
+	fmt.Println("reading from amster")
 	readFromMaster(conn)
 }
 
 func sendReplConf(conn net.Conn, replicaPort string) {
+	fmt.Println("inside send repl conf")
 	buf := make([]byte, 1024)
 
 	// 1. REPLCONF listening-port <PORT>
