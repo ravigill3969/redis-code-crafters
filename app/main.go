@@ -73,6 +73,8 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 		raw := string(buffer[:n])
+
+		fmt.Println("received", string(raw))
 		cmdParser := utils.ParseRESP(raw)
 		if len(cmdParser) == 0 {
 			continue
@@ -220,7 +222,7 @@ func sendPSYNC(conn net.Conn) {
 }
 
 func propagateToReplicas(cmd []string) {
-	fmt.Println("inside peopogate to replicas" , cmd)
+	fmt.Println("inside peopogate to replicas", cmd)
 	resp := utils.EncodeAsRESPArray(cmd)
 	mu.RLock()
 	defer mu.RUnlock()
