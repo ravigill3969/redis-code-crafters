@@ -77,13 +77,12 @@ func handleConnection(conn net.Conn) {
 		raw := string(buffer[:n])
 
 		cmdParser := utils.ParseRESP(raw)
-		fmt.Println("received", cmdParser)
+
 		if len(cmdParser) == 0 {
 			continue
 		}
 
 		cmd := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
-		fmt.Println(cmd)
 
 		if cmd == "REPLCONF" {
 			fmt.Println("its a replica")
@@ -162,7 +161,6 @@ func handleConnection(conn net.Conn) {
 }
 
 func connectToMaster(masterHost, masterPort, replicaPort string) {
-	fmt.Println("connecting to master")
 	conn, err := net.Dial("tcp", net.JoinHostPort(masterHost, masterPort))
 	if err != nil {
 		log.Fatalf("Failed to connect to master: %v", err)
@@ -177,7 +175,6 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 
 	sendReplConf(conn, replicaPort)
 	sendPSYNC(conn)
-	fmt.Println("reading from amster")
 	readFromMaster(conn)
 }
 
@@ -247,7 +244,10 @@ func readFromMaster(conn net.Conn) {
 	var accumulated []byte
 	// var replicaOffset int64 = 0
 
+	fmt.Println("read from master begin")
+
 	for {
+		fmt.Println("read from master on going")
 		n, err := conn.Read(buffer)
 		if err != nil {
 			log.Println("Lost connection to master:", err)
