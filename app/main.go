@@ -250,7 +250,7 @@ func readFromMaster(conn net.Conn) {
 			return
 		}
 
-		fmt.Println("wtf i recived", n)
+		fmt.Println("wtf i recived", buffer)
 
 		accumulated = append(accumulated, buffer[:n]...)
 
