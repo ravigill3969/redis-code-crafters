@@ -268,7 +268,8 @@ func readFromMaster(conn net.Conn) {
 
 		switch cmd[0] {
 		case "REPLCONF":
-			conn.Write([]byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n%d\r\n", totalBytes)))
+			fmt.Println("ys")
+			fmt.Fprintf(conn, "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n%d\r\n", totalBytes)
 		}
 
 		// conn.Write([]byte("hell yeah"))
