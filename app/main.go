@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -248,10 +249,9 @@ func readFromMaster(conn net.Conn) {
 
 	fmt.Println("read from master begin")
 
-	totalBytes := 0
+	rdbDone := false
 
 	for {
-		fmt.Println(conn.RemoteAddr())
 		fmt.Println("read from master on going")
 		n, err := conn.Read(buffer)
 
@@ -262,17 +262,20 @@ func readFromMaster(conn net.Conn) {
 
 		accumulated = append(accumulated, buffer[:n]...)
 
-		cmd := utils.ParseRESP(string(accumulated))
-
-		fmt.Println(cmd[0])
-
-		switch cmd[0] {
-		case "REPLCONF":
-			fmt.Println("ys")
-			fmt.Fprintf(conn, "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n%d\r\n", totalBytes)
+		if !rdbDone {
+			if bytes.Contains(accumulated, []byte("REDIS")) {
+				accumulated = nil
+				rdbDone = true
+			}
+			continue
 		}
 
-		// conn.Write([]byte("hell yeah"))
+		for {
+			cmd := utils.ParseRESP(string(accumulated))
+
+			fmt.Println(cmd)
+
+		}
 
 	}
 
