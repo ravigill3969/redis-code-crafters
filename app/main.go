@@ -168,7 +168,9 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 	}
 
 	conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
+
 	buf := make([]byte, 1024)
+	
 	n, _ := conn.Read(buf)
 	if string(buf[:n]) != "+PONG\r\n" {
 		log.Fatalf("Expected +PONG, got: %q", string(buf[:n]))
