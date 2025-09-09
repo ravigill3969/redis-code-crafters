@@ -45,6 +45,7 @@ func TokenizeRESP(raw string) []string {
 }
 
 func ParseRESP(raw string) []interface{} {
+	fmt.Println("parsing")
 	lines := TokenizeRESP(raw)
 	cmd := []interface{}{}
 
