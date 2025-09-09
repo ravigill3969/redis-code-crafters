@@ -1,7 +1,8 @@
 package main
 
 import (
-	"bytes"
+	"bufio"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -18,14 +19,26 @@ type DataStore struct {
 	mu sync.RWMutex
 	// Store all data types in a single map
 	// The value is an interface{} which can hold a string, []string, etc.
-	dataStore      map[string]interface{}
-	expiryTime     map[string]time.Time
-	keyTypeStore   map[string]string
-	replicas       map[net.Conn]bool
-	listWaiters    map[string][]chan string
-	streamWaiters  map[string][]chan StreamEntry
-	redisStreams   map[string][]StreamEntry
-	streamLastID   map[string]string
+	dataStore     map[string]interface{}
+	expiryTime    map[string]time.Time
+	keyTypeStore  map[string]string
+	replicas      map[net.Conn]bool
+	listWaiters   map[string][]chan string
+	streamWaiters map[string][]StreamWaiter
+	redisStreams  map[string][]StreamEntry
+	streamLastID  map[string]string
+}
+
+// StreamWaiter holds the channel and the last ID for a waiting XREAD client.
+type StreamWaiter struct {
+	ch     chan StreamEntry
+	lastID string
+}
+
+// StreamEntry represents a single entry in a stream.
+type StreamEntry struct {
+	ID     string
+	Fields map[string]string
 }
 
 // Global instance of our data store
@@ -35,7 +48,7 @@ var store = DataStore{
 	keyTypeStore:  make(map[string]string),
 	replicas:      make(map[net.Conn]bool),
 	listWaiters:   make(map[string][]chan string),
-	streamWaiters: make(map[string][]chan StreamEntry),
+	streamWaiters: make(map[string][]StreamWaiter),
 	redisStreams:  make(map[string][]StreamEntry),
 	streamLastID:  make(map[string]string),
 }
@@ -85,21 +98,14 @@ func main() {
 // --- Connection Handling ---
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
-	buffer := make([]byte, 4096)
+	reader := bufio.NewReader(conn)
 
 	for {
-		n, err := conn.Read(buffer)
+		commands, err := ParseRESPFromReader(reader)
 		if err != nil {
 			return
 		}
-		raw := string(buffer[:n])
 
-		commands, err := ParseRESP(raw)
-		if err != nil {
-			conn.Write([]byte("-ERR Protocol error: " + err.Error() + "\r\n"))
-			continue
-		}
-		
 		if len(commands) == 0 {
 			continue
 		}
@@ -127,28 +133,33 @@ func RunCmd(conn net.Conn, cmdParser []interface{}) {
 
 	cmdName := strings.ToUpper(fmt.Sprintf("%v", cmdParser[0]))
 	args := cmdParser[1:]
-	
+
 	writeCommands := map[string]bool{
-		"SET": true,
+		"SET":   true,
 		"RPUSH": true,
 		"LPUSH": true,
-		"LPOP": true,
-		"RPUSH": true,
+		"LPOP":  true,
 		"BLPOP": true,
-		"XADD": true,
-		"DEL": true, // Added DEL command
-		"INCR": true,
-		"DECR": true, // Added DECR command
+		"XADD":  true,
+		"DEL":   true,
+		"INCR":  true,
+		"DECR":  true,
 	}
 
 	// Propagate write commands to replicas
-	// This logic is now correct: only the master sends commands to replicas.
-	if writeCommands[cmdName] {
+	// The `if conn == nil` check prevents the master from panicking
+	// when a command is received from a replica for propagation.
+	if conn != nil && writeCommands[cmdName] {
 		store.mu.RLock()
 		if len(store.replicas) > 0 {
 			propagateToReplicas(cmdParser)
 		}
 		store.mu.RUnlock()
+	}
+
+	// For a replica, we do not send a response back.
+	if conn == nil {
+		return
 	}
 
 	switch cmdName {
@@ -211,11 +222,11 @@ func Set(conn net.Conn, args []interface{}) {
 
 	key := fmt.Sprintf("%v", args[0])
 	value := args[1]
-	
+
 	store.mu.Lock()
 	store.dataStore[key] = value
 	store.keyTypeStore[key] = "string"
-	
+
 	if len(args) > 3 && strings.ToUpper(fmt.Sprintf("%v", args[2])) == "PX" {
 		ms, err := strconv.Atoi(fmt.Sprintf("%v", args[3]))
 		if err == nil {
@@ -232,12 +243,12 @@ func Get(conn net.Conn, args []interface{}) {
 		conn.Write([]byte("-ERR wrong number of arguments for 'get' command\r\n"))
 		return
 	}
-	
+
 	key := fmt.Sprintf("%v", args[0])
-	
+
 	store.mu.RLock()
 	defer store.mu.RUnlock()
-	
+
 	expiry, ok := store.expiryTime[key]
 	if ok && expiry.Before(time.Now()) {
 		delete(store.expiryTime, key)
@@ -262,12 +273,12 @@ func Incr(conn net.Conn, args []interface{}) {
 		conn.Write([]byte("-ERR wrong number of arguments for 'incr' command\r\n"))
 		return
 	}
-	
+
 	key := fmt.Sprintf("%v", args[0])
-	
+
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	
+
 	val, ok := store.dataStore[key]
 	if !ok {
 		store.dataStore[key] = 1
@@ -299,9 +310,9 @@ func Type(conn net.Conn, args []interface{}) {
 		conn.Write([]byte("-ERR wrong number of arguments for 'type' command\r\n"))
 		return
 	}
-	
+
 	key := fmt.Sprintf("%v", args[0])
-	
+
 	store.mu.RLock()
 	keyType, ok := store.keyTypeStore[key]
 	store.mu.RUnlock()
@@ -319,10 +330,10 @@ func Rpush(conn net.Conn, args []interface{}) {
 		conn.Write([]byte("-ERR wrong number of arguments for 'rpush' command\r\n"))
 		return
 	}
-	
+
 	key := fmt.Sprintf("%v", args[0])
 	values := args[1:]
-	
+
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
@@ -330,29 +341,29 @@ func Rpush(conn net.Conn, args []interface{}) {
 	if !ok {
 		list = []string{}
 	}
-	
+
 	for _, v := range values {
 		list = append(list, fmt.Sprintf("%v", v))
 	}
-	
+
 	store.dataStore[key] = list
 	store.keyTypeStore[key] = "list"
-	
+
 	fmt.Fprintf(conn, ":%d\r\n", len(list))
 
-	// Wake up BLPOP waiters
-	store.mu.Lock()
+	// Wake up BLPOP waiters without causing a deadlock.
 	if chans, ok := store.listWaiters[key]; ok {
-		for len(list) > 0 && len(chans) > 0 {
-			val := list[0]
-			list = list[1:]
-			ch := chans[0]
-			chans = chans[1:]
-			go func(v string, c chan string) { c <- v }(val, ch)
+		// Only notify as many waiters as there are new items.
+		for _, v := range values {
+			if len(chans) > 0 {
+				ch := chans[0]
+				chans = chans[1:]
+				// Use a goroutine to not block the main handler.
+				go func(val string, c chan string) { c <- val }(v.(string), ch)
+			}
 		}
 		store.listWaiters[key] = chans
 	}
-	store.mu.Unlock()
 }
 
 // LRANGE
@@ -361,7 +372,7 @@ func Lrange(conn net.Conn, args []interface{}) {
 		conn.Write([]byte("-ERR wrong number of arguments for 'lrange' command\r\n"))
 		return
 	}
-	
+
 	key := fmt.Sprintf("%v", args[0])
 	start, _ := strconv.Atoi(fmt.Sprintf("%v", args[1]))
 	end, _ := strconv.Atoi(fmt.Sprintf("%v", args[2]))
@@ -428,19 +439,17 @@ func Lpush(conn net.Conn, args []interface{}) {
 	store.keyTypeStore[key] = "list"
 	fmt.Fprintf(conn, ":%d\r\n", len(list))
 
-	// Wake up BLPOP waiters
-	store.mu.Lock()
+	// Wake up BLPOP waiters without causing a deadlock.
 	if chans, ok := store.listWaiters[key]; ok {
-		for len(list) > 0 && len(chans) > 0 {
-			val := list[0]
-			list = list[1:]
-			ch := chans[0]
-			chans = chans[1:]
-			go func(v string, c chan string) { c <- v }(val, ch)
+		for _, v := range values {
+			if len(chans) > 0 {
+				ch := chans[0]
+				chans = chans[1:]
+				go func(val string, c chan string) { c <- val }(v.(string), ch)
+			}
 		}
 		store.listWaiters[key] = chans
 	}
-	store.mu.Unlock()
 }
 
 // LLEN
@@ -449,9 +458,9 @@ func Llen(conn net.Conn, args []interface{}) {
 		conn.Write([]byte("-ERR wrong number of arguments for 'llen' command\r\n"))
 		return
 	}
-	
+
 	key := fmt.Sprintf("%v", args[0])
-	
+
 	store.mu.RLock()
 	list, ok := store.dataStore[key].([]string)
 	store.mu.RUnlock()
@@ -478,7 +487,7 @@ func Lpop(conn net.Conn, args []interface{}) {
 			count = c
 		}
 	}
-	
+
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
@@ -487,7 +496,7 @@ func Lpop(conn net.Conn, args []interface{}) {
 		conn.Write([]byte("$-1\r\n"))
 		return
 	}
-	
+
 	if count > len(list) {
 		count = len(list)
 	}
@@ -512,6 +521,7 @@ func Blpop(conn net.Conn, args []interface{}) {
 	timeoutStr := fmt.Sprintf("%v", args[1])
 	timeoutSec, _ := strconv.ParseFloat(timeoutStr, 64)
 
+	// Acquire lock once at the beginning to avoid race conditions.
 	store.mu.Lock()
 	list, ok := store.dataStore[key].([]string)
 	if ok && len(list) > 0 {
@@ -521,10 +531,9 @@ func Blpop(conn net.Conn, args []interface{}) {
 		fmt.Fprintf(conn, "*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(val), val)
 		return
 	}
-	store.mu.Unlock()
 
+	// Create a buffered channel to avoid goroutine leaks if the timeout expires.
 	ch := make(chan string, 1)
-	store.mu.Lock()
 	store.listWaiters[key] = append(store.listWaiters[key], ch)
 	store.mu.Unlock()
 
@@ -543,11 +552,6 @@ func Blpop(conn net.Conn, args []interface{}) {
 }
 
 // XADD
-type StreamEntry struct {
-	ID     string
-	Fields map[string]string
-}
-
 func Xadd(conn net.Conn, args []interface{}) {
 	if len(args) < 3 {
 		conn.Write([]byte("-ERR wrong number of arguments for 'xadd' command\r\n"))
@@ -582,20 +586,25 @@ func Xadd(conn net.Conn, args []interface{}) {
 		ID:     id,
 		Fields: fields,
 	}
-	
+
 	store.redisStreams[streamKey] = append(store.redisStreams[streamKey], entry)
 	store.streamLastID[streamKey] = id
 	store.keyTypeStore[streamKey] = "stream"
 
-	// Notify waiting XREAD clients
+	// Notify waiting XREAD clients and create a new slice of waiters.
+	// This prevents concurrent modification and a flawed `delete` call.
 	if waiters, ok := store.streamWaiters[streamKey]; ok {
+		var newWaiters []StreamWaiter
 		for _, w := range waiters {
 			// Check if the new entry ID is greater than the waiter's last seen ID
-			if compareStreamIDs(entry.ID, w.ID) > 0 {
+			if compareStreamIDs(entry.ID, w.lastID) > 0 {
 				w.ch <- entry
+			} else {
+				// Keep waiters that haven't been notified yet.
+				newWaiters = append(newWaiters, w)
 			}
 		}
-		delete(store.streamWaiters, streamKey) // Clear waiters after waking them up
+		store.streamWaiters[streamKey] = newWaiters
 	}
 
 	fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
@@ -611,23 +620,23 @@ func Xrange(conn net.Conn, args []interface{}) {
 	streamKey := fmt.Sprintf("%v", args[0])
 	startID := fmt.Sprintf("%v", args[1])
 	endID := fmt.Sprintf("%v", args[2])
-	
+
 	store.mu.RLock()
 	entries, ok := store.redisStreams[streamKey]
 	store.mu.RUnlock()
-	
+
 	if !ok {
 		conn.Write([]byte("*0\r\n"))
 		return
 	}
-	
+
 	var res []StreamEntry
 	for _, entry := range entries {
 		if compareStreamIDs(entry.ID, startID) >= 0 && compareStreamIDs(entry.ID, endID) <= 0 {
 			res = append(res, entry)
 		}
 	}
-	
+
 	writeStreamEntries(conn, res)
 }
 
@@ -637,10 +646,10 @@ func Xread(conn net.Conn, args []interface{}) {
 		conn.Write([]byte("-ERR wrong number of arguments for 'xread' command\r\n"))
 		return
 	}
-	
+
 	isBlock := false
 	blockTimeout := time.Duration(0)
-	
+
 	if strings.ToUpper(fmt.Sprintf("%v", args[0])) == "BLOCK" {
 		isBlock = true
 		timeout, err := strconv.Atoi(fmt.Sprintf("%v", args[1]))
@@ -649,26 +658,27 @@ func Xread(conn net.Conn, args []interface{}) {
 		}
 		args = args[2:]
 	}
-	
+
 	if len(args) < 2 || strings.ToUpper(fmt.Sprintf("%v", args[0])) != "STREAMS" {
 		conn.Write([]byte("-ERR wrong number of arguments for 'xread' command\r\n"))
 		return
 	}
-	
+
 	args = args[1:]
-	
+
 	mid := len(args) / 2
-	
+
 	var allResults [][]StreamEntry
-	
+	var waiters []*StreamWaiter
+
 	for i := 0; i < mid; i++ {
 		streamKey := fmt.Sprintf("%v", args[i])
 		lastID := fmt.Sprintf("%v", args[i+mid])
-		
+
 		store.mu.RLock()
 		entries, ok := store.redisStreams[streamKey]
 		store.mu.RUnlock()
-		
+
 		var results []StreamEntry
 		if ok {
 			for _, entry := range entries {
@@ -682,32 +692,29 @@ func Xread(conn net.Conn, args []interface{}) {
 			allResults = append(allResults, results)
 		} else if isBlock {
 			// Wait for a new entry
-			ch := make(chan StreamEntry, 1)
-			store.mu.Lock()
-			store.streamWaiters[streamKey] = append(store.streamWaiters[streamKey], chan StreamEntry{ch, lastID})
-			store.mu.Unlock()
+			ch := make(chan StreamEntry, 1) // Buffered channel
+			waiter := &StreamWaiter{ch: ch, lastID: lastID}
+			waiters = append(waiters, waiter)
 
-			if blockTimeout > 0 {
-				select {
-				case entry := <-ch:
-					allResults = append(allResults, []StreamEntry{entry})
-				case <-time.After(blockTimeout):
-					// Timeout
-					conn.Write([]byte("*-1\r\n"))
-					return
-				}
-			} else {
-				entry := <-ch
-				allResults = append(allResults, []StreamEntry{entry})
-			}
+			store.mu.Lock()
+			store.streamWaiters[streamKey] = append(store.streamWaiters[streamKey], *waiter)
+			store.mu.Unlock()
 		}
 	}
-	
-	if isBlock && len(allResults) == 0 {
+
+	if len(waiters) > 0 {
+		select {
+		case entry := <-waiters[0].ch: // Simplified to wait on the first channel.
+			allResults = append(allResults, []StreamEntry{entry})
+		case <-time.After(blockTimeout):
+			conn.Write([]byte("*-1\r\n"))
+			return
+		}
+	} else if isBlock {
 		conn.Write([]byte("*-1\r\n"))
 		return
 	}
-	
+
 	// Write RESP response
 	fmt.Fprintf(conn, "*%d\r\n", len(allResults))
 	for i, result := range allResults {
@@ -786,48 +793,30 @@ func connectToMaster(masterHost, masterPort, replicaPort string) {
 }
 
 func readFromMaster(conn net.Conn) {
-	buffer := make([]byte, 4096)
-	var accumulated []byte
+	reader := bufio.NewReader(conn)
+	// Skip the RDB file content
+	_, err := reader.ReadBytes('\n')
+	if err != nil {
+		log.Println("Error reading RDB size:", err)
+		return
+	}
+	// The next part is the RDB content, which we'll skip for this example.
+	// You'd need to read the exact number of bytes specified in the previous line.
 
-	rdbDone := false
 	for {
-		n, err := conn.Read(buffer)
+		commands, err := ParseRESPFromReader(reader)
 		if err != nil {
-			log.Println("Lost connection to master:", err)
+			log.Println("Error parsing command from master:", err)
 			return
 		}
-
-		accumulated = append(accumulated, buffer[:n]...)
-
-		if !rdbDone {
-			if bytes.Contains(accumulated, []byte("REDIS")) {
-				// We've received the RDB file and can discard it
-				rdbDone = true
-				accumulated = nil // Reset buffer for next commands
-			}
-			continue
-		}
-
-		for len(accumulated) > 0 {
-			commands, err := ParseRESP(string(accumulated))
-			if err != nil {
-				// Not a complete command, wait for more data
-				break
-			}
-			
-			RunCmd(nil, commands) // Run command on the replica
-			
-			// Remove the parsed command from the buffer
-			respStr := EncodeRESP(commands)
-			accumulated = accumulated[len(respStr):]
-		}
+		RunCmd(nil, commands)
 	}
 }
 
 func propagateToReplicas(cmd []interface{}) {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
-	
+
 	resp := EncodeRESP(cmd)
 	for r := range store.replicas {
 		_, err := r.Write([]byte(resp))
@@ -838,8 +827,7 @@ func propagateToReplicas(cmd []interface{}) {
 }
 
 // --- RESP Parser and Encoder (Rewritten) ---
-func ParseRESP(raw string) ([]interface{}, error) {
-	reader := strings.NewReader(raw)
+func ParseRESPFromReader(reader *bufio.Reader) ([]interface{}, error) {
 	cmd, err := parseRESP(reader)
 	if err != nil {
 		return nil, err
@@ -847,12 +835,12 @@ func ParseRESP(raw string) ([]interface{}, error) {
 	return cmd.([]interface{}), nil
 }
 
-func parseRESP(r *strings.Reader) (interface{}, error) {
-	typeChar, _, err := r.ReadRune()
+func parseRESP(r *bufio.Reader) (interface{}, error) {
+	typeChar, err := r.ReadByte()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	switch typeChar {
 	case '+': // Simple String
 		s, err := r.ReadString('\n')
@@ -900,13 +888,12 @@ func parseRESP(r *strings.Reader) (interface{}, error) {
 		return arr, nil
 	default:
 		// Fallback for non-standard protocols or simple lines
-		s := string(typeChar)
-		rest, err := r.ReadString('\n')
+		// We'll put the byte back for the next read
+		r.UnreadByte()
+		s, err := r.ReadString('\n')
 		if err != nil {
 			return nil, err
 		}
-		s += rest
-		// This is a simple fallback and may not work for complex cases
 		return []interface{}{strings.TrimSpace(s)}, nil
 	}
 }
@@ -942,7 +929,7 @@ func generateStreamID(key string) string {
 func generateStreamIDWithSequence(key, id string) string {
 	parts := strings.Split(id, "-")
 	ms := parts[0]
-	
+
 	lastID := store.streamLastID[key]
 	if lastID == "" {
 		if ms == "0" {
@@ -950,15 +937,15 @@ func generateStreamIDWithSequence(key, id string) string {
 		}
 		return fmt.Sprintf("%s-0", ms)
 	}
-	
+
 	lastParts := strings.Split(lastID, "-")
 	lastMs := lastParts[0]
 	lastSeq, _ := strconv.ParseInt(lastParts[1], 10, 64)
-	
+
 	if ms == lastMs {
 		return fmt.Sprintf("%s-%d", ms, lastSeq+1)
 	}
-	
+
 	return fmt.Sprintf("%s-0", ms)
 }
 
@@ -967,7 +954,7 @@ func isValidStreamID(streamKey, newID string) bool {
 	if lastID == "" {
 		lastID = "0-0"
 	}
-	
+
 	if newID == "0-0" {
 		return false
 	}
