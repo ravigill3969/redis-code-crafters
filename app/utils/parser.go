@@ -1,88 +1,76 @@
 package utils
 
 import (
-    "bytes"
-    "fmt"
-    "io"
-    "strconv"
-    "strings"
+	"fmt"
+	"strconv"
+	"strings"
 )
 
-// EncodeAsRESPArray converts a slice of strings into a RESP array string.
 func EncodeAsRESPArray(cmd []string) string {
-    s := fmt.Sprintf("*%d\r\n", len(cmd))
-    for _, arg := range cmd {
-        s += fmt.Sprintf("$%d\r\n%s\r\n", len(arg), arg)
-    }
-    return s
+	s := fmt.Sprintf("*%d\r\n", len(cmd))
+	for _, arg := range cmd {
+		s += fmt.Sprintf("$%d\r\n%s\r\n", len(arg), arg)
+	}
+	return s
 }
 
-// InterfaceSliceToStringSlice converts a slice of interfaces to a slice of strings.
 func InterfaceSliceToStringSlice(cmd []interface{}) []string {
-    strCmd := make([]string, len(cmd))
-    for i, arg := range cmd {
-        strCmd[i] = fmt.Sprintf("%v", arg)
-    }
-    return strCmd
+	strCmd := make([]string, len(cmd))
+	for i, arg := range cmd {
+		switch v := arg.(type) {
+		case string:
+			strCmd[i] = v
+		case []byte:
+			strCmd[i] = string(v)
+		default:
+			strCmd[i] = fmt.Sprintf("%v", arg) // fallback
+		}
+	}
+
+	return strCmd
 }
 
-// ParseRESP reads from an io.Reader and returns a slice of parsed commands.
-func ParseRESP(reader *bytes.Buffer) ([][]interface{}, error) {
-    var commands [][]interface{}
-    for {
-        prefix, err := reader.ReadByte()
-        if err != nil {
-            return commands, io.EOF
-        }
-        
-        switch prefix {
-        case '*': // Array
-            line, err := reader.ReadString('\n')
-            if err != nil {
-                return commands, io.EOF
-            }
-            arrayLen, err := strconv.Atoi(strings.TrimSpace(line))
-            if err != nil {
-                return commands, fmt.Errorf("invalid array length: %w", err)
-            }
-            if arrayLen == -1 {
-                continue
-            }
-            
-            var cmd []interface{}
-            for i := 0; i < arrayLen; i++ {
-                argPrefix, err := reader.ReadByte()
-                if err != nil {
-                    return commands, io.EOF
-                }
-                if argPrefix != '$' {
-                    return commands, fmt.Errorf("expected bulk string for command argument, got: %c", argPrefix)
-                }
+func TokenizeRESP(raw string) []string {
 
-                argLenStr, err := reader.ReadString('\n')
-                if err != nil {
-                    return commands, io.EOF
-                }
-                argLen, err := strconv.Atoi(strings.TrimSpace(argLenStr))
-                if err != nil {
-                    return commands, fmt.Errorf("invalid bulk string length: %w", err)
-                }
-                
-                if argLen == -1 {
-                    cmd = append(cmd, nil)
-                    continue
-                }
+	clean := strings.ReplaceAll(raw, "\r\n", "\n")
+	lines := strings.Split(clean, "\n")
+	tokens := []string{}
+	for _, line := range lines {
+		if line != "" {
+			tokens = append(tokens, line)
+		}
+	}
 
-                bulk := make([]byte, argLen+2)
-                if _, err := io.ReadFull(reader, bulk); err != nil {
-                    return commands, io.EOF
-                }
-                cmd = append(cmd, string(bulk[:argLen]))
-            }
-            commands = append(commands, cmd)
-        
-        default:
-            return commands, fmt.Errorf("unknown RESP prefix: %c", prefix)
-        }
-    }
+	return tokens
+}
+
+func ParseRESP(raw string) []interface{} {
+	lines := TokenizeRESP(raw)
+	cmd := []interface{}{}
+
+	for _, t := range lines {
+		if t == "" {
+			continue
+		}
+
+		switch t[0] {
+		case '*':
+			if len(t) == 1 {
+				cmd = append(cmd, t)
+			}
+		case '$':
+			if len(t) == 1 {
+				cmd = append(cmd, t)
+			}
+		default:
+			if i, err := strconv.Atoi(t); err == nil {
+				cmd = append(cmd, i)
+			} else {
+				cmd = append(cmd, t)
+			}
+		}
+	}
+
+	return cmd
+
 }
