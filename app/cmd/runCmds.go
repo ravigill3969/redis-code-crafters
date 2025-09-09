@@ -1,134 +1,168 @@
-package handlers
+package cmds
 
 import (
+	"fmt"
 	"net"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/codecrafters-io/redis-starter-go/app/utils"
+	"github.com/codecrafters-io/redis-starter-go/app/handlers"
 )
 
-var (
-	mu                 sync.RWMutex
-	redisKeyValueStore = make(map[string]utils.CacheItem)
-	redisKeyTypeStore  = make(map[string]string)
-	redisStreams       = make(map[string]*utils.Stream)
-	redisListStore     = make(map[string][]string)
+var redisKeyValueStore = make(map[string]interface{})
+var redisKeyExpiryTime = make(map[string]time.Time)
 
-	xreadBlockMutex  = sync.Mutex{}
-	xreadBlockSignal = sync.NewCond(&xreadBlockMutex)
-)
+var redisKeyTypeStore = make(map[string]string)
 
-func RunCmds(conn net.Conn, cmd []string) (string, bool) {
-	if len(cmd) == 0 {
-		return "", false
-	}
+func RunCmds(conn net.Conn, cmdParser []interface{}) {
 
-	commandName := strings.ToUpper(cmd[0])
-	args := cmd[1:]
-
-	isWriteCmd := IsWriteCommand(commandName)
-
-	switch commandName {
+	fmt.Println("inside run cmds")
+	switch strings.ToUpper(fmt.Sprintf("%v", cmdParser[0])) {
 	case "PING":
-		return "+PONG\r\n", false
+		conn.Write([]byte("+PONG\r\n"))
+
 	case "ECHO":
-		if len(args) > 0 {
-			return utils.ToRespStr(args[0]), false
+		if len(cmdParser) > 1 {
+			conn.Write([]byte("+" + fmt.Sprintf("%v", cmdParser[1]) + "\r\n"))
+		} else {
+			conn.Write([]byte("+\r\n"))
 		}
-		return "", false
-	case "INFO":
-		return infoHandler(conn, args), false
+
 	case "SET":
-		return setHandler(conn, args), true
-	case "GET":
-		return getHandler(conn, args), false
-	case "TYPE":
-		return typeHandler(conn, args), false
-	case "INCR":
-		return incrHandler(conn, args), true
-	case "XADD":
-		return xaddHandler(conn, args), true
-	case "XRANGE":
-		return xrangeHandler(conn, args), false
-	case "XREAD":
-		return xreadHandler(conn, args), false
-	case "LPUSH":
-		return lpushHandler(conn, args), true
-	case "RPUSH":
-		return rpushHandler(conn, args), true
-	case "LLEN":
-		return llenHandler(conn, args), false
-	case "LPOP":
-		return lpopHandler(conn, args), true
-	case "BLPOP":
-		return blpopHandler(conn, args), true
-	case "PSYNC":
-		return psyncHandler(conn, args), false
-	case "REPLCONF":
-		return replconfHandler(conn, args), false
-	default:
-		return "-ERR unknown command\r\n", false
-	}
-}
+		if len(cmdParser) < 2 {
+			conn.Write([]byte("-ERR wrong number of arguments\r\n"))
 
-func IsWriteCommand(commandName string) bool {
-	switch strings.ToUpper(commandName) {
-	case "SET", "INCR", "XADD", "LPUSH", "RPUSH", "LPOP", "BLPOP":
-		return true
-	}
-	return false
-}
-
-// Each command handler from your original code should be refactored into a separate function here.
-// For example:
-func setHandler(conn net.Conn, args []string) string {
-	if len(args) < 2 {
-		return "-ERR wrong number of arguments for 'SET' command\r\n"
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	key, value := args[0], args[1]
-	expiry := int64(-1)
-
-	if len(args) > 2 && strings.ToUpper(args[2]) == "PX" && len(args) > 3 {
-		ms, err := strconv.Atoi(args[3])
-		if err == nil {
-			expiry = time.Now().UnixMilli() + int64(ms)
 		}
-	}
 
-	redisKeyValueStore[key] = utils.CacheItem{
-		Value:     value,
-		ExpiresAt: expiry,
-		ItemType:  "string",
+		for i := 0; i < len(cmdParser); i += 3 {
+			if i+2 < len(cmdParser) {
+
+				key := fmt.Sprintf("%v", cmdParser[i])
+
+				redisKeyTypeStore[key] = "string"
+				handlers.SET(cmdParser[i:i+3], conn)
+			}
+		}
+
+	case "GET":
+		if len(cmdParser) < 2 {
+			conn.Write([]byte("-ERR wrong number of arguments\r\n"))
+		}
+
+		handlers.GET(cmdParser[1:], conn)
+
+	case "TYPE":
+		key, ok := cmdParser[1].(string)
+		if !ok {
+			fmt.Fprintf(conn, "+none\r\n")
+			break
+		}
+
+		val, exists := redisKeyTypeStore[key]
+
+		if exists {
+			fmt.Fprintf(conn, "+%s\r\n", val)
+		} else {
+			fmt.Fprintf(conn, "+none\r\n")
+		}
+
+	case "LRANGE":
+		res, err := handlers.LRANGE(cmdParser[1:])
+		if err != nil {
+			conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
+		} else {
+			fmt.Fprintf(conn, "*%d\r\n", len(res))
+			for _, v := range res {
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(v), v)
+			}
+		}
+
+	case "LPUSH":
+		redisKeyTypeStore[cmdParser[1].(string)] = "list"
+		length, err := handlers.LPUSH(cmdParser[1:])
+		if err != nil {
+			conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
+		} else {
+			fmt.Fprintf(conn, ":%d\r\n", length)
+		}
+
+	case "LLEN":
+		length := handlers.LLEN(cmdParser[1:])
+
+		fmt.Fprintf(conn, ":%d\r\n", length)
+
+	case "LPOP":
+
+		res, ok := handlers.LPOP(cmdParser[1:])
+
+		if len(res) == 1 {
+			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(res[0]), res[0])
+		} else if ok {
+			fmt.Fprintf(conn, "*%d\r\n", len(res))
+			for _, v := range res {
+				fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(v), v)
+			}
+		} else {
+			fmt.Fprintf(conn, "$-1\r\n")
+		}
+
+	case "RPUSH":
+		redisKeyTypeStore[cmdParser[1].(string)] = "list"
+		length, err := handlers.RPUSH(cmdParser[1:])
+		if err != nil {
+			conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
+		} else {
+			fmt.Fprintf(conn, ":%d\r\n", length)
+		}
+
+	case "BLPOP":
+		key := fmt.Sprintf("%s", cmdParser[1])
+		val, ok := handlers.BLPOP(cmdParser[1:])
+
+		if ok {
+			fmt.Fprintf(conn, "*2\r\n")
+			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(key), key)
+			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(val), val)
+		} else {
+			fmt.Fprintf(conn, "*-1\r\n")
+		}
+
+	case "XADD":
+		key := fmt.Sprintf("%s", cmdParser[1])
+		redisKeyTypeStore[key] = "stream"
+
+		id, err := handlers.XADD(cmdParser[1:])
+		if err != nil {
+			fmt.Fprintf(conn, "-%s\r\n", err.Error())
+		} else {
+			// send RESP bulk string with the ID
+			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(id), id)
+		}
+
+	case "XRANGE":
+		handlers.XRANGE(conn, cmdParser[1:])
+
+	case "XREAD":
+
+		handlers.XREAD(conn, cmdParser[1:])
+
+	case "INCR":
+		handlers.INCR(cmdParser[1:], conn)
+
+	case "INFO":
+		handlers.INFO(conn, cmdParser)
+
+	case "PSYNC":
+		handlers.PSYNC(conn)
+
+	case "REPLCONF":
+		if len(cmdParser) >= 2 && strings.ToUpper(fmt.Sprintf("%v", cmdParser[1])) == "ACK" {
+			conn.Write([]byte("+OK\r\n"))
+		} else {
+			conn.Write([]byte("+OK\r\n"))
+		}
+
+	default:
+		conn.Write([]byte("-ERR unknown command\r\n"))
 	}
-	return "+OK\r\n"
 }
-
-func getHandler(conn net.Conn, args []string) string {
-	if len(args) < 1 {
-		return "-ERR wrong number of arguments for 'GET' command\r\n"
-	}
-
-	mu.RLock()
-	defer mu.RUnlock()
-
-	key := args[0]
-	item, exists := redisKeyValueStore[key]
-	if !exists {
-		return "$-1\r\n"
-	}
-	if item.ExpiresAt != -1 && time.Now().UnixMilli() >= item.ExpiresAt {
-		delete(redisKeyValueStore, key)
-		return "$-1\r\n"
-	}
-
-	return utils.ToRespStr(item.Value)
-}
-
-// ... and so on for all your other commands (INFO, PSYNC, etc.)

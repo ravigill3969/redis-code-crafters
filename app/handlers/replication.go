@@ -9,30 +9,22 @@ import (
 
 func INFO(conn net.Conn, cmd []interface{}) {
 	role := "master"
-
 	for i := 0; i < len(os.Args); i++ {
-		if os.Args[i] == "--replicaof" && i+1 < len(os.Args) {
+		if os.Args[i] == "--replicaof" {
 			role = "slave"
-			i++
 		}
 	}
-
 	masterReplId := "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
 	masterReplOffset := "0"
-
 	response := "role:" + role + "\r\n" +
 		"master_replid:" + masterReplId + "\r\n" +
 		"master_repl_offset:" + masterReplOffset + "\r\n"
-
 	bulk := fmt.Sprintf("$%d\r\n%s\r\n", len(response), response)
-
 	fmt.Fprint(conn, bulk)
 }
 
 func PSYNC(conn net.Conn) {
 	conn.Write([]byte("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n"))
-	RDBcontent, _ := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
-	fmt.Fprintf(conn, "$%v\r\n%v", len(string(RDBcontent)), string(RDBcontent))
+	RDBcontent, _ := hex.DecodeString("524544495330303131fa...")
+	fmt.Fprintf(conn, "$%v\r\n%v", len(RDBcontent), string(RDBcontent))
 }
-
-
